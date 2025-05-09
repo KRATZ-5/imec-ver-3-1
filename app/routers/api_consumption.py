@@ -29,7 +29,9 @@ async def api_consumption(
 @router.post(
     "",
     response_class=JSONResponse,
-    summary="Добавить запись потребления (только админ)"
+    summary="Добавить запись потребления (только админ)",
+    response_model=ConsumptionCreate,
+    status_code=201
 )
 async def api_consumption_add(
     payload: ConsumptionCreate,
@@ -39,7 +41,7 @@ async def api_consumption_add(
         rec = await manual_add_consumption(
             payload.region_code, payload.period, payload.value
         )
-        return JSONResponse(rec)
+        return JSONResponse(status_code=201, content=rec)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
