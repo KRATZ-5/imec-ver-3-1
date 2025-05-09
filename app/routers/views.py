@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.dependencies import get_current_user
-from database.crud import get_period_range
+from database.crud import get_period_range, get_all_regions
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -29,6 +29,15 @@ async def login_get(request: Request, msg: str | None = Query(None)):
         "request": request,
         "msg": msg
     })
+
+@router.get("/about", response_class=HTMLResponse)
+async def about(request: Request, user=Depends(get_current_user)):
+    # Получаем список регионов из БД
+    regions_raw = get_all_regions()
+    # Преобразуем в объекты с id и name
+    regions = [{"id": r["id"], "name": r["name"]} for r in regions_raw]
+    return templates.TemplateResponse("about.html", {"request": request, "user": user, "regions": regions})
+
 
 @router.get("/register", response_class=HTMLResponse)
 async def register_get(request: Request):
