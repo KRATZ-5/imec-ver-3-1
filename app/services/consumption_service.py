@@ -91,6 +91,18 @@ async def import_consumption_csv(csv_file: UploadFile) -> int:
     except Exception as e:
         raise ValueError(f"Error reading CSV: {e}")
 
+    # 1. Читаем всё тело файла в память и создаём текстовый буфер
+    try:
+       raw = await csv_file.read()
+       text = raw.decode('utf-8-sig')  # убираем BOM, если есть
+       buffer = io.StringIO(text)
+       df = pd.read_csv(
+           buffer,
+           dtype = {'region_code': int, 'region': str, 'period': int, 'value': float}
+        )
+    except Exception as e:
+        raise ValueError(f"Error reading CSV: {e}")
+
     # 2. Валидация
     required_cols = {'region_code', 'region', 'period', 'value'}
     if not required_cols.issubset(df.columns):
