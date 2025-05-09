@@ -181,33 +181,38 @@
       const name = f.properties.name;
       layer.bindTooltip(name);
       layer.on('click', () => {
-        const cid = `chart-${code}-${Date.now()}`;
+        const cid = `chart-${code}`; // постоянный ID для региона
         const popupContent = `
           <div class="chart-popup-wrapper">
             <h4>${name}</h4>
             <canvas id="${cid}" width="300" height="200"></canvas>
           </div>`;
         layer.bindPopup(popupContent, { maxWidth: 350 }).openPopup();
-        map.once('popupopen', e => {
-          const canvas = document.getElementById(cid);
-          if (!canvas) return;
-          fetch(`/api/consumption/history?region_code=${code}`)
-            .then(r => r.json())
-            .then(data => {
-              data.sort((a, b) => a.period - b.period);
-              new Chart(canvas.getContext('2d'), {
-                type: 'line',
-                data: {
-                  labels: data.map(d => d.period),
-                  datasets: [{ label: 'Потребление, млн кВт·ч', data: data.map(d => d.value), fill: false, tension: 0.3 }]
-                },
-                options: {
-                  scales: { x: { title: { display: true, text: 'Год' } }, y: { title: { display: true, text: 'млн кВт·ч' } } }
-                }
-              });
-            });
-        });
       });
     }
+
+    // Глобальный обработчик открытия попапа для отрисовки графика
+    map.on('popupopen', e => {
+      const container = e.popup.getElement();
+      const canvas = container.querySelector('canvas');
+      if (!canvas) return;
+      const idParts = canvas.id.split('-');
+      const regionCode = idParts[1];
+      fetch(`/api/consumption/history?region_code=${regionCode}`)
+        .then(r => r.json())
+        .then(data => {
+          data.sort((a, b) => a.period - b.period);
+          new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+              labels: data.map(d => d.period),
+              datasets: [{ label: 'Потребление, млн кВт·ч', data: data.map(d => d.value), fill: false, tension: 0.3 }]
+            },
+            options: {
+              scales: { x: { title: { display: true, text: 'Год' } }, y: { title: { display: true, text: 'млн кВт·ч' } } }
+            }
+          });
+        });
+    });
   </script>
 {% endblock %}
