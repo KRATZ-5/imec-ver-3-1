@@ -185,12 +185,13 @@
       layer.bindTooltip(name);
       layer.on('click', () => {
         map.closePopup();
-        const cid = `chart-${code}`;
+        const cid = `chart-${code}-${Date.now()}`;
         const popupContent = `
           <div class="chart-popup-wrapper">
             <h4>${name}</h4>
             <canvas id="${cid}" width="300" height="200"></canvas>
           </div>`;
+        layer.unbindPopup();
         layer.bindPopup(popupContent, { maxWidth: 350 }).openPopup();
       });
     }
@@ -200,8 +201,7 @@
       const container = e.popup.getElement();
       const canvas = container.querySelector('canvas');
       if (!canvas) return;
-      const idParts = canvas.id.split('-');
-      const regionCode = idParts[1];
+      const regionCode = canvas.id.split('-')[1]; // работает и с новым id
       fetch(`/api/consumption/history?region_code=${regionCode}`)
         .then(r => r.json())
         .then(data => {
@@ -212,13 +212,22 @@
             type: 'line',
             data: {
               labels: data.map(d => d.period),
-              datasets: [{ label: 'Потребление, млн кВт·ч', data: data.map(d => d.value), fill: false, tension: 0.3 }]
+              datasets: [{
+                label: 'Потребление, млн кВт·ч',
+                data: data.map(d => d.value),
+                fill: false,
+                tension: 0.3
+              }]
             },
             options: {
-              scales: { x: { title: { display: true, text: 'Год' } }, y: { title: { display: true, text: 'млн кВт·ч' } } }
+              scales: {
+                x: { title: { display: true, text: 'Год' } },
+                y: { title: { display: true, text: 'млн кВт·ч' } }
+              }
             }
           });
         });
     });
+
   </script>
 {% endblock %}
