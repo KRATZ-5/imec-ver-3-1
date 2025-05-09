@@ -12,13 +12,13 @@ from database.db import engine
 from database.models import Base
 from sqlalchemy import text
 
-
+Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
-# Включаем PostGIS, если ещё не включено
-with engine.connect() as conn:
-    conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-    conn.commit()
+# # Включаем PostGIS, если ещё не включено
+# with engine.connect() as conn:
+#     conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+#     conn.commit()
 
 Base.metadata.create_all(bind=engine)
 app.include_router(admin.router)
