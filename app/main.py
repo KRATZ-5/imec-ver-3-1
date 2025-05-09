@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.core.config import BASE_DIR
 from app.core.config import STATIC_DIR
@@ -12,8 +12,17 @@ from database.db import engine
 from database.models import Base
 from sqlalchemy import text
 
-Base.metadata.create_all(bind=engine)
+
 app = FastAPI()
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    # Для HTTPException FastAPI уже возвращает JSON,
+    # но всё остальное мы тоже оборачиваем в JSON:
+    return JSONResponse(
+        status_code=getattr(exc, "status_code", 500),
+        content={"error": str(exc)}
+    )
 
 # # Включаем PostGIS, если ещё не включено
 # with engine.connect() as conn:
@@ -21,6 +30,15 @@ app = FastAPI()
 #     conn.commit()
 
 Base.metadata.create_all(bind=engine)
+
+with engine.begin() as conn:
+    conn.execute(text(
+        "SELECT setval("
+        "  pg_get_serial_sequence('consumption','id'),"
+        "  (SELECT COALESCE(MAX(id), 0) FROM consumption)"
+        ")"
+    ))
+
 app.include_router(admin.router)
 static_path = os.path.join(BASE_DIR, "app", "static")
 
