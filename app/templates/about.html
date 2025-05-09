@@ -1,18 +1,42 @@
 {% extends "layout.html" %}
-  <head>
-    <link rel="stylesheet" href="/static/styles.css">
-  </head>
 {% block title %}О проекте{% endblock %}
 {% block content %}
-  <h2>О программе</h2>
-  <p><strong>Название:</strong> IMEC - Интерактивная карта энергопотребления регионами РФ</p>
-  <p><strong>Описание:</strong> Данная веб-приложение позволяет визуализировать потребление электроэнергии по регионам РФ за выбранные годы. Представляет данные в виде хороèплетной карты, тепловой карты, графиков и таблиц Top-5/Bottom-5.</p>
-  <p><strong>Разработчик:</strong> Михаил Чугунов (студент Финансового университета при правительстве РФ, факультет информационных технологий и анализа больших данных)</p>
+  <div class="container">
+    <section class="card mb-6 p-4 shadow-lg rounded-2xl">
+      <h2 class="text-xl font-bold mb-2">О программе</h2>
+      <p class="mb-4">IMEC - Интерактивная карта энергопотребления регионами РФ</p>
+      <p class="text-gray-700">Данная веб-приложение позволяет визуализировать потребление электроэнергии по регионам РФ за выбранные годы. Представляет данные в виде хороèплетной карты, тепловой карты, графиков и таблиц Top-5/Bottom-5.</p>
+      <ul class="list-disc list-inside mb-4 text-gray-700">
+        <li>Хороплетная карта с градиентным отображением объемов потребления.</li>
+        <li>Тепловая карта концентрации потребления.</li>
+        <li>Графики динамики потребления по регионам (Chart.js).</li>
+        <li>Таблицы Top-5 и Bottom-5 регионов.</li>
+        <li>Поиск и подсветка регионов.</li>
+      </ul>
+      <div class="bg-gray-50 p-4 rounded-lg">
+        <h3 class="font-semibold mb-1">Разработчик</h3>
+        <p>Михаил Чугунов (студент Финансового университета при правительстве РФ, факультет информационных технологий и анализа больших данных)</p>
+      </div>
+    </section>
 
-  <h3>Список регионов</h3>
-  <ul>
-  {% for region in regions %}
-    <li>{{ region.id }} — {{ region.name }}</li>
-  {% endfor %}
-  </ul>
+    <section class="card p-4 shadow-lg rounded-2xl">
+      <h3 class="text-lg font-bold mb-3">Список регионов</h3>
+      <table class="w-full table-auto border-collapse">
+        <thead>
+          <tr class="bg-gray-200">
+            <th class="p-2 text-left">ID</th>
+            <th class="p-2 text-left">Название региона</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for region in regions %}
+            <tr class="border-b hover:bg-gray-50">
+              <td class="p-2 text-sm text-gray-800">{{ region.id }}</td>
+              <td class="p-2 text-sm text-gray-800">{{ region.name }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
 {% endblock %}
