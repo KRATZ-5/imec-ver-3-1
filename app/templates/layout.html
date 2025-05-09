@@ -9,6 +9,7 @@
 <body>
     <nav>
         <a href="/">Карта</a>
+        | <a href="/about">О проекте</a>
         {% if user and user.role == 'admin' %}
             | <a href="/admin">Панель администратора</a>
         {% endif %}
