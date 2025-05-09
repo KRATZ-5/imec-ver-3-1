@@ -139,7 +139,7 @@
           const pv = prevValues[code] || 0;
           const arrow = year > MIN_YEAR ? (v > pv ? '↑' : v < pv ? '↓' : '') : '';
           const colorStyle = v > pv ? 'color:green' : v < pv ? 'color:red' : '';
-          return { code, name, v, pv, arrow, colorStyle };
+          return { code, name, v, arrow, colorStyle };
         });
         arr.sort((a, b) => b.v - a.v);
         const top5 = arr.slice(0, 5), bottom5 = arr.slice(-5).reverse();
@@ -151,19 +151,17 @@
           `<tr><td>${i.name}</td><td>${i.v.toLocaleString(undefined, fmt)} млн кВт·ч <span style="${i.colorStyle}">${i.arrow}</span></td></tr>`
         ).join('');
 
-        // Обновляем градиентный слой
+        // Обновляем слои
         choroplethLayer.clearLayers();
+        changeLayer.clearLayers();
         const maxV = Math.max(...Object.values(values), 0);
         L.geoJSON(geoData, {
           style: f => {
             const v = values[f.properties.code] || 0;
-            return { fillColor: `rgba(255,0,0,${maxV ? v/maxV : 0})`, fillOpacity: 0.7, weight: 1 };
+            return { fillColor: `rgba(255,0,0,${maxV ? v/ maxV : 0})`, fillOpacity: 0.7, weight: 1 };
           },
           onEachFeature: setupFeature
         }).addTo(choroplethLayer);
-
-        // Обновляем слой изменений
-        changeLayer.clearLayers();
         L.geoJSON(geoData, {
           style: f => {
             const code = f.properties.code;
@@ -183,7 +181,6 @@
       const name = f.properties.name;
       layer.bindTooltip(name);
       layer.on('click', () => {
-        // Генерируем уникальный ID для canvas
         const cid = `chart-${code}-${Date.now()}`;
         const popupContent = `
           <div class="chart-popup-wrapper">
@@ -198,28 +195,19 @@
             .then(r => r.json())
             .then(data => {
               data.sort((a, b) => a.period - b.period);
-              // Рисуем график
               new Chart(canvas.getContext('2d'), {
                 type: 'line',
                 data: {
                   labels: data.map(d => d.period),
-                  datasets: [{
-                    label: 'Потребление, млн кВт·ч',
-                    data: data.map(d => d.value),
-                    fill: false,
-                    tension: 0.3
-                  }]
+                  datasets: [{ label: 'Потребление, млн кВт·ч', data: data.map(d => d.value), fill: false, tension: 0.3 }]
                 },
                 options: {
-                  scales: {
-                    x: { title: { display: true, text: 'Год' } },
-                    y: { title: { display: true, text: 'млн кВт·ч' } }
-                  }
+                  scales: { x: { title: { display: true, text: 'Год' } }, y: { title: { display: true, text: 'млн кВт·ч' } } }
                 }
               });
             });
         });
       });
     }
-</script>
-{% block end %}
+  </script>
+{% endblock %}
