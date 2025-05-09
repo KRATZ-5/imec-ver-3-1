@@ -138,17 +138,17 @@
           const v = o.value;
           const pv = prevValues[code] || 0;
           const arrow = year > MIN_YEAR ? (v > pv ? '↑' : v < pv ? '↓' : '') : '';
-          const color = v > pv ? 'text-green-500' : v < pv ? 'text-red-500' : '';
-          return { code, name, v, pv, arrow, color };
+          const colorStyle = v > pv ? 'color:green' : v < pv ? 'color:red' : '';
+          return { code, name, v, pv, arrow, colorStyle };
         });
         arr.sort((a, b) => b.v - a.v);
         const top5 = arr.slice(0, 5), bottom5 = arr.slice(-5).reverse();
         const fmt = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
         topT.innerHTML = top5.map(i =>
-          `<tr><td>${i.name}</td><td class="text-right">${i.v.toLocaleString(undefined, fmt)} млн кВт·ч <span class="${i.color}">${i.arrow}</span></td></tr>`
+          `<tr><td>${i.name}</td><td>${i.v.toLocaleString(undefined, fmt)} млн кВт·ч <span style="${i.colorStyle}">${i.arrow}</span></td></tr>`
         ).join('');
         botT.innerHTML = bottom5.map(i =>
-          `<tr><td>${i.name}</td><td class="text-right">${i.v.toLocaleString(undefined, fmt)} млн кВт·ч <span class="${i.color}">${i.arrow}</span></td></tr>`
+          `<tr><td>${i.name}</td><td>${i.v.toLocaleString(undefined, fmt)} млн кВт·ч <span style="${i.colorStyle}">${i.arrow}</span></td></tr>`
         ).join('');
 
         // Обновляем градиентный слой
@@ -183,14 +183,16 @@
       const name = f.properties.name;
       layer.bindTooltip(name);
       layer.on('click', () => {
-        const cid = `chart-${code}-${Date.now()}`;
-        layer.bindPopup(`<div class="chart-popup-wrapper"><h4>${name}</h4><canvas id="${cid}" class="chart-popup" width="300" height="200"></canvas></div>`, { maxWidth: 350 }).openPopup();
-        map.once('popupopen', () => {
+        const popupContent = `<div class="chart-popup-wrapper"><h4>${name}</h4><canvas id="chart-canvas"></canvas></div>`;
+        layer.bindPopup(popupContent, { maxWidth: 350 }).openPopup();
+        map.once('popupopen', e => {
+          const canvas = e.popup.getElement().querySelector('canvas');
+          if (!canvas) return;
           fetch(`/api/consumption/history?region_code=${code}`)
             .then(r => r.json())
             .then(data => {
               data.sort((a, b) => a.period - b.period);
-              new Chart(document.getElementById(cid).getContext('2d'), {
+              new Chart(canvas.getContext('2d'), {
                 type: 'line',
                 data: { labels: data.map(d => d.period), datasets: [{ label: 'Потребление, млн кВт·ч', data: data.map(d => d.value), fill: false, tension: 0.3 }] },
                 options: { scales: { x: { title: { display: true, text: 'Год' } }, y: { title: { display: true, text: 'млн кВт·ч' } } } }
