@@ -1,45 +1,50 @@
 {% extends "layout.html" %}
-  <head>
-    <link rel="stylesheet" href="/static/styles.css">
-  </head>
 {% block title %}О проекте{% endblock %}
 {% block content %}
-  <div class="container">
-    <section class="card mb-6 p-4 shadow-lg rounded-2xl">
-      <h2 class="text-xl font-bold mb-2">О программе</h2>
-      <p class="mb-4">IMEC - Интерактивная карта энергопотребления регионами РФ</p>
-      <p class="text-gray-700">Данная веб-приложение позволяет визуализировать потребление электроэнергии по регионам РФ за выбранные годы. Представляет данные в виде хороèплетной карты, тепловой карты, графиков и таблиц Top-5/Bottom-5.</p>
-      <ul class="list-disc list-inside mb-4 text-gray-700">
-        <li>Хороплетная карта с градиентным отображением объемов потребления.</li>
-        <li>Тепловая карта концентрации потребления.</li>
-        <li>Графики динамики потребления по регионам (Chart.js).</li>
-        <li>Таблицы Top-5 и Bottom-5 регионов.</li>
-        <li>Поиск и подсветка регионов.</li>
-      </ul>
-      <div class="bg-gray-50 p-4 rounded-lg">
-        <h3 class="font-semibold mb-1">Разработчик</h3>
-        <p>Михаил Чугунов (студент Финансового университета при правительстве РФ, факультет информационных технологий и анализа больших данных)</p>
+  <div class="container mx-auto px-4 py-8">
+    <!-- Hero Section -->
+    <section class="bg-white shadow-lg rounded-2xl p-6 mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="md:col-span-2">
+        <h1 class="text-2xl font-extrabold text-gray-800 mb-4">IMEC</h1>
+        <p class="text-gray-700 mb-4">Интерактивная карта энергопотребления по регионам РФ. Позволяет визуализировать, анализировать и сравнивать данные по годам, выявлять лидеров и аутсайдеров, а также исследовать динамику потребления.</p>
+        <ul class="list-disc list-inside text-gray-700 space-y-2">
+          <li><strong>Хороплетная карта</strong> с градиентом для наглядного отображения объёмов.</li>
+          <li><strong>Тепловая карта</strong> концентрации потребления.</li>
+          <li><strong>Графики динамики</strong> (Chart.js) при клике на регион.</li>
+          <li><strong>Top-5/Bottom-5 таблицы</strong> для быстрой аналитики.</li>
+          <li><strong>Поиск и подсветка</strong> регионов.</li>
+          <li><strong>Импорт CSV</strong> данных для массового обновления.</li>
+        </ul>
+      </div>
+      <div class="flex flex-col items-center bg-gray-50 rounded-lg p-4">
+        <img src="/static/avatar.png" alt="Avatar" class="w-24 h-24 rounded-full mb-4" />
+        <h2 class="text-lg font-bold text-gray-800">Михаил Чугунов</h2>
+        <p class="text-sm text-gray-600">Студент Финансового университета при правительстве РФ,</p>
+        <p class="text-sm text-gray-600">Факультет информационных технологий и анализа больших данных</p>
       </div>
     </section>
 
-    <section class="card p-4 shadow-lg rounded-2xl">
-      <h3 class="text-lg font-bold mb-3">Список регионов</h3>
-      <table class="w-full table-auto border-collapse">
-        <thead>
-          <tr class="bg-gray-200">
-            <th class="p-2 text-left">ID</th>
-            <th class="p-2 text-left">Название региона</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for region in regions %}
-            <tr class="border-b hover:bg-gray-50">
-              <td class="p-2 text-sm text-gray-800">{{ region.id }}</td>
-              <td class="p-2 text-sm text-gray-800">{{ region.name }}</td>
+    <!-- Regions Table -->
+    <section class="bg-white shadow-lg rounded-2xl p-6">
+      <h2 class="text-xl font-bold text-gray-800 mb-4">Список регионов</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">ID</th>
+              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Регион</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {% for region in regions %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3 text-sm text-gray-800">{{ region.id }}</td>
+              <td class="px-4 py-3 text-sm text-gray-800">{{ region.name }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </section>
   </div>
 {% endblock %}
