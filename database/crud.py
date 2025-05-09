@@ -65,19 +65,19 @@ def get_all_regions():
         stmt = select(
             Region.id.label("id"),
             Region.name.label("name"),
-            Region.geom.ST_AsGeoJSON().label("geom_json")
+            Region.geom.label("geom_json")     # теперь просто текст
         )
         rows = session.execute(stmt).all()
         features = []
         for r in rows:
+            # geom_json уже строка с JSON — парсим её
             geom = json.loads(r.geom_json)
             features.append({
-                "id": r.id,
+                "id":   r.id,
                 "name": r.name,
                 "geometry": geom
             })
         return features
-
 
 def get_consumption_code_value(year: int) -> list[tuple[int, float]]:
     with SessionLocal() as session:
