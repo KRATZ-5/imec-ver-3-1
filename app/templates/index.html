@@ -183,23 +183,43 @@
       const name = f.properties.name;
       layer.bindTooltip(name);
       layer.on('click', () => {
-        const popupContent = `<div class="chart-popup-wrapper"><h4>${name}</h4><canvas id="chart-canvas"></canvas></div>`;
+        // Генерируем уникальный ID для canvas
+        const cid = `chart-${code}-${Date.now()}`;
+        const popupContent = `
+          <div class="chart-popup-wrapper">
+            <h4>${name}</h4>
+            <canvas id="${cid}" width="300" height="200"></canvas>
+          </div>`;
         layer.bindPopup(popupContent, { maxWidth: 350 }).openPopup();
         map.once('popupopen', e => {
-          const canvas = e.popup.getElement().querySelector('canvas');
+          const canvas = document.getElementById(cid);
           if (!canvas) return;
           fetch(`/api/consumption/history?region_code=${code}`)
             .then(r => r.json())
             .then(data => {
               data.sort((a, b) => a.period - b.period);
+              // Рисуем график
               new Chart(canvas.getContext('2d'), {
                 type: 'line',
-                data: { labels: data.map(d => d.period), datasets: [{ label: 'Потребление, млн кВт·ч', data: data.map(d => d.value), fill: false, tension: 0.3 }] },
-                options: { scales: { x: { title: { display: true, text: 'Год' } }, y: { title: { display: true, text: 'млн кВт·ч' } } } }
+                data: {
+                  labels: data.map(d => d.period),
+                  datasets: [{
+                    label: 'Потребление, млн кВт·ч',
+                    data: data.map(d => d.value),
+                    fill: false,
+                    tension: 0.3
+                  }]
+                },
+                options: {
+                  scales: {
+                    x: { title: { display: true, text: 'Год' } },
+                    y: { title: { display: true, text: 'млн кВт·ч' } }
+                  }
+                }
               });
             });
         });
       });
     }
-  </script>
-{% endblock %}
+</script>
+{% block end %}
