@@ -10,9 +10,17 @@ import urllib.parse
 from app.routers import admin
 from database.db import engine
 from database.models import Base
+from sqlalchemy import text
+
+
+app = FastAPI()
+
+# Включаем PostGIS, если ещё не включено
+with engine.connect() as conn:
+    conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+    conn.commit()
 
 Base.metadata.create_all(bind=engine)
-app = FastAPI()
 app.include_router(admin.router)
 static_path = os.path.join(BASE_DIR, "app", "static")
 
