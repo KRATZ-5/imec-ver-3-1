@@ -35,7 +35,7 @@
   <div id="map" class="w-full h-96 mb-4"></div>
 
   <!-- Инфопанель Top-5 / Bottom-5 -->
-  <div id="info-panel" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div id="info-panel" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
     <div>
       <h3 class="font-bold mb-2">Top-5 регионов с наибольшим потреблением</h3>
       <table id="top5-table" class="w-full text-sm">
@@ -59,8 +59,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    // Инициализация карты и слоёв
-    const map = L.map('map', { center: [55.5, 37.6], zoom: 4, worldCopyJump: true });
+    const map = L.map('map', { center: [55.5, 37.6], zoom: 4 });
     const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; CartoDB & OpenStreetMap'
     }).addTo(map);
@@ -70,8 +69,7 @@
     let choroplethLayer = L.geoJSON().addTo(map);
     let changeLayer     = L.geoJSON().addTo(map);
 
-    // Панель слоёв
-    const layerControl = L.control.layers(
+    L.control.layers(
       { 'Базовая карта': baseLayer },
       {
         'Градиент потребления': choroplethLayer,
@@ -80,7 +78,6 @@
       { collapsed: false }
     ).addTo(map);
 
-    // Элементы управления
     const yearRange = document.getElementById('year-range');
     const yearLabel = document.getElementById('year-label');
     const playBtn   = document.getElementById('play-btn');
@@ -90,7 +87,6 @@
     const MIN_YEAR = +yearRange.min, MAX_YEAR = +yearRange.max;
     let playInterval, debounceTimer;
 
-    // Динамика загрузки
     fetch('/api/regions')
       .then(r => r.json())
       .then(data => {
@@ -101,7 +97,6 @@
       })
       .catch(console.error);
 
-    // Обработчики
     yearRange.addEventListener('input', () => {
       const y = +yearRange.value;
       yearLabel.textContent = y;
@@ -109,8 +104,7 @@
       debounceTimer = setTimeout(() => updateData(y), 300);
     });
     playBtn.addEventListener('click', () => {
-      playBtn.disabled = true;
-      pauseBtn.disabled = false;
+      playBtn.disabled = true; pauseBtn.disabled = false;
       playInterval = setInterval(() => {
         let y = +yearRange.value;
         y = y < MAX_YEAR ? y + 1 : MIN_YEAR;
@@ -121,8 +115,7 @@
     });
     pauseBtn.addEventListener('click', () => {
       clearInterval(playInterval);
-      playBtn.disabled = false;
-      pauseBtn.disabled = true;
+      playBtn.disabled = false; pauseBtn.disabled = true;
     });
     searchBtn.addEventListener('click', () => {
       const term = searchInput.value.trim().toLowerCase();
@@ -135,7 +128,6 @@
       } else alert('Регион не найден');
     });
 
-    // Обновление данных и слоёв
     function updateData(year) {
       const prevYear = year - 1;
       Promise.all([
@@ -146,16 +138,28 @@
         currData.forEach(o => values[o.region_code] = o.value);
         prevData.forEach(o => prevValues[o.region_code] = o.value);
 
+        // Обновить Top5/Bottom5
+        const items = currData.map(o => {
+          const prev = prevValues[o.region_code] || 0;
+          return { code: o.region_code, name: '', value: o.value, prev };
+        });
+        items.sort((a,b) => b.value - a.value);
+        const top5 = items.slice(0,5), bottom5 = items.slice(-5).reverse();
+        const fmt = { minimumFractionDigits:1, maximumFractionDigits:1 };
+        document.querySelector('#top5-table tbody').innerHTML =
+          top5.map(i => `<tr><td>${i.name || i.code}</td><td class="text-right">${i.value.toLocaleString(undefined,fmt)}</td></tr>`).join('');
+        document.querySelector('#bottom5-table tbody').innerHTML =
+          bottom5.map(i => `<tr><td>${i.name || i.code}</td><td class="text-right">${i.value.toLocaleString(undefined,fmt)}</td></tr>`).join('');
+
         // Градиентный слой
         choroplethLayer.clearLayers();
         const maxV = Math.max(...Object.values(values), 0);
         L.geoJSON(geoData, {
           style: f => {
             const v = values[f.properties.code] || 0;
-            const alpha = maxV ? v / maxV : 0;
-            return { fillColor: `rgba(255,0,0,${alpha})`, color: '#555', weight: 1, fillOpacity: 0.7 };
+            return { fillColor: `rgba(255,0,0,${maxV? v/maxV:0})`, color:'#555', weight:1, fillOpacity:0.7 };
           },
-          onEachFeature: bindPopupAndTooltip
+          onEachFeature: featureInit
         }).addTo(choroplethLayer);
 
         // Слой сравнения
@@ -163,40 +167,31 @@
         L.geoJSON(geoData, {
           style: f => {
             const code = f.properties.code;
-            const curr = values[code] || 0;
-            const prev = prevValues[code] || 0;
-            const fill = curr > prev
-              ? 'rgba(0,200,0,0.6)'
-              : curr < prev
-                ? 'rgba(200,0,0,0.6)'
-                : 'rgba(150,150,150,0.4)';
-            return { fillColor: fill, color: '#333', weight: 1, fillOpacity: 0.7 };
+            const curr = values[code]||0, prev = prevValues[code]||0;
+            const fill = curr>prev?'rgba(0,200,0,0.6)':curr<prev?'rgba(200,0,0,0.6)':'rgba(150,150,150,0.4)';
+            return { fillColor:fill, color:'#333', weight:1, fillOpacity:0.7 };
           },
-          onEachFeature: bindPopupAndTooltip
+          onEachFeature: featureInit
         }).addTo(changeLayer);
       }).catch(console.error);
     }
 
-    // Общая функция для popups и графиков
-    function bindPopupAndTooltip(f, layer) {
+    function featureInit(f, layer) {
       const code = f.properties.code;
-      const name = f.properties.name;
-      layer.bindTooltip(name);
+      let name = f.properties.name;
+      layer.bindTooltip(`<strong>${name}</strong>`);
       layer.on('click', () => {
         const cid = `chart-${code}-${Date.now()}`;
-        const popupContent = `
-          <div class="chart-popup-wrapper"><h4>${name}</h4><canvas id="${cid}" class="chart-popup"></canvas></div>
-        `;
-        layer.bindPopup(popupContent, { maxWidth: 350 }).openPopup();
-        map.once('popupopen', () => {
+        layer.bindPopup(`<div class="chart-popup-wrapper"><h4>${name}</h4><canvas id="${cid}" class="chart-popup"></canvas></div>`,{maxWidth:350}).openPopup();
+        map.on('popupopen', function onOpen(e){
+          if(e.popup._source!==layer) return;
+          map.off('popupopen', onOpen);
           fetch(`/api/consumption/history?region_code=${code}`)
-            .then(r => r.json())
-            .then(full => {
-              full.sort((a, b) => a.period - b.period);
-              new Chart(document.getElementById(cid).getContext('2d'), {
-                type: 'line',
-                data: { labels: full.map(d => d.period), datasets: [{ label: 'Потребление, млн кВт·ч', data: full.map(d => d.value), fill: false, tension: 0.3 }] },
-                options: { scales: { x: { title: { display: true, text: 'Год' } }, y: { title: { display: true, text: 'млн кВт·ч' } } } }
+            .then(r=>r.json()).then(full=>{
+              full.sort((a,b)=>a.period-b.period);
+              new Chart(document.getElementById(cid).getContext('2d'),{
+                type:'line', data:{ labels:full.map(d=>d.period), datasets:[{label:'Потребление', data:full.map(d=>d.value), fill:false,tension:0.3}]},
+                options:{ scales:{ x:{ title:{display:true,text:'Год'}}, y:{ title:{display:true,text:'млн кВт·ч'}} }}
               });
             });
         });
