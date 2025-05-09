@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+pandas
+folium
+shapely
+passlib[bcrypt]
+pyjwt
+filelock
+psycopg2-binary
+sqlalchemy
+pandas
+geoalchemy2
+shapely
+python-dotenv
+postgis

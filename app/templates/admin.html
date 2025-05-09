@@ -1,0 +1,129 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <h2>Админ-панель</h2>
+  <p>Привет, {{ user.email }}!</p>
+
+  <!-- Навигация -->
+  <nav>
+    <a href="/">К карте</a>
+    <a href="/admin">Админ-панель</a>
+    <a href="/logout">Выйти</a>
+  </nav>
+
+  <!-- Форма для импорта CSV -->
+  <div class="admin-card" id="import-section">
+    <h3>Импорт CSV</h3>
+    <form id="csv-import-form" enctype="multipart/form-data">
+      <input type="file" name="csv_file" accept=".csv" required>
+      <button type="submit" class="btn btn-primary">Загрузить CSV</button>
+    </form>
+    <div id="csv-import-msg" class="result"></div>
+  </div>
+
+  <!-- Секция удаления данных -->
+  <div class="admin-card" id="delete-section">
+    <h3>Удалить данные потребления</h3>
+    <form id="delete-form">
+      <input type="text" name="periods" placeholder="Годы (2021,2022)" required>
+      <input type="number" name="region_code" min="1" placeholder="Код региона (опц.)">
+      <button type="submit" class="btn btn-primary">Удалить</button>
+    </form>
+    <div id="delete-msg" class="result"></div>
+  </div>
+
+  <!-- Секция ручного добавления -->
+  <div class="admin-card" id="manual-section">
+    <h3>Добавить одно значение потребления</h3>
+    <form id="manual-form">
+      <select name="region_code" id="manual-region" required>
+        <option value="">— выберите регион —</option>
+      </select>
+      <input type="number" name="period" min="2008" max="2100" placeholder="Год" required>
+      <input type="number" name="value" step="0.1" placeholder="Потребление, млн кВт·ч" required>
+      <button type="submit" class="btn btn-primary">Добавить</button>
+    </form>
+    <div id="manual-msg" class="result"></div>
+  </div>
+
+  <!-- Скрипт для работы форм -->
+  <script>
+    // Загрузка списка регионов в селект
+    fetch('/api/regions')
+      .then(r=>r.json())
+      .then(data=>{
+        const sel = document.getElementById('manual-region');
+        data.features.forEach(f=>{
+          const opt = document.createElement('option');
+          opt.value = f.properties.code;
+          opt.textContent = f.properties.name;
+          sel.append(opt);
+        });
+      });
+
+    // Общая функция отправки форм и вывода сообщения
+    async function submitForm(formId, url, optsBuilder, msgId) {
+      const form = document.getElementById(formId);
+      const msgEl = document.getElementById(msgId);
+      form.addEventListener('submit', async e=>{
+        e.preventDefault();
+        msgEl.textContent = '';
+        try {
+          const opts = optsBuilder(new FormData(form));
+          const resp = await fetch(url, opts);
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+          msgEl.textContent = 'Успешно: ' + JSON.stringify(data);
+          form.reset();
+        } catch(err) {
+          msgEl.textContent = 'Ошибка: ' + err.message;
+          msgEl.classList.add('alert-error');
+        }
+      });
+    }
+
+    // CSV import
+    submitForm(
+      'csv-import-form',
+      '/admin/consumption/import',
+      fd => ({ method: 'POST', headers:{}, body: fd }),
+      'csv-import-msg'
+    );
+
+    // Delete
+    submitForm(
+      'delete-form',
+      '/admin/consumption',
+      fd => {
+        // собираем JSON из полей
+        const periods = fd.get('periods')
+          .split(',').map(s=>s.trim()).filter(Boolean).map(Number);
+        const region_code = fd.get('region_code') ? Number(fd.get('region_code')) : null;
+        return {
+          method: 'DELETE',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ periods: periods.length?periods:null, region_code })
+        };
+      },
+      'delete-msg'
+    );
+
+    // Manual add
+    submitForm(
+      'manual-form',
+      '/api/consumption',
+      fd => {
+        return {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            region_code: Number(fd.get('region_code')),
+            period:      Number(fd.get('period')),
+            value:       Number(fd.get('value'))
+          })
+        };
+      },
+      'manual-msg'
+    );
+  </script>
+{% endblock %}

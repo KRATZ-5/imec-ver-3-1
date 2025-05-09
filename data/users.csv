@@ -1,0 +1,3 @@
+id,email,password_hash,role,is_active
+1,admin@example.com,$2b$12$.4qAnrfmSEpxw4xaqL0SZOitgQO4yuRYkh.Ay.Yyx4Kbrz6cbhJqW,admin,True
+2,user@example.com,$2b$12$Q60b4gfLb2YtZsV4bTHo7.yYH22xGhkWZk2N4Vasxy3qPW6PjFjwS,user,True

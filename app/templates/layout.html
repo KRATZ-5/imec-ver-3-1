@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}IMEC{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <a href="/">Карта</a>
+        {% if user and user.role == 'admin' %}
+            | <a href="/admin">Панель администратора</a>
+        {% endif %}
+        | <a href="/logout">Выйти</a>
+    </nav>
+    {% block content %}{% endblock %}
+</body>
+</html>
