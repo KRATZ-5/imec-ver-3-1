@@ -2,6 +2,15 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
+from sqlalchemy import text
+from database.db import engine
+from database.models import Base
+
+with engine.connect() as conn:
+    conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+    conn.commit()
+
+Base.metadata.create_all(bind=engine)
 
 load_dotenv()
 
