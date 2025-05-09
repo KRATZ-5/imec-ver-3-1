@@ -5,20 +5,18 @@
   <head>
     <link rel="stylesheet" href="/static/styles.css">
   </head>
-  <h2>Карта потребления электроэнергии регионами РФ</h2>
-
-
+  <h2 class="mb-4">Карта потребления электроэнергии регионами РФ</h2>
 
   <!-- Поиск региона -->
-  <div class="search-container">
+  <div class="search-container mb-4">
     <input type="text" id="region-search" placeholder="Поиск региона..." aria-label="Search region" />
     <button id="search-btn" type="button">Найти</button>
   </div>
 
   <!-- Слайдер и Play/Pause -->
-  <div class="controls">
+  <div class="controls mb-4 flex items-center space-x-4">
     <div>
-      <label for="year-range">Год: <span id="year-label">2021</span></label><br/>
+      <label for="year-range">Год: <span id="year-label">{{ max_year }}</span></label><br/>
       <input
         type="range"
         id="year-range"
@@ -27,33 +25,28 @@
         value="{{ max_year }}"
         step="1"
         disabled
-        data-min-year="{{ min_year }}"
-        data-max-year="{{ max_year }}"
       />
     </div>
-    <button id="play-btn" type="button" aria-label="Play animation" disabled>▶️ Play</button>
-    <button id="pause-btn" type="button" aria-label="Pause animation" disabled>⏸ Pause</button>
+    <button id="play-btn" type="button" disabled>▶️ Play</button>
+    <button id="pause-btn" type="button" disabled>⏸ Pause</button>
   </div>
 
   <!-- Контейнер для карты -->
-  <div id="map"></div>
-
-  <!-- Индикаторы загрузки -->
-  <div id="regions-loading">Загрузка регионов</div>
+  <div id="map" class="w-full h-96 mb-4"></div>
 
   <!-- Инфопанель Top-5 / Bottom-5 -->
-  <div id="info-panel">
+  <div id="info-panel" class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
-      <h3>Top-5 регионов с наибольшим потреблением</h3>
-      <table id="top5-table">
-        <thead><tr><th>Регион</th><th>Потребление</th></tr></thead>
+      <h3 class="font-bold mb-2">Top-5 регионов с наибольшим потреблением</h3>
+      <table id="top5-table" class="w-full text-sm">
+        <thead><tr><th class="text-left">Регион</th><th class="text-right">Потребление</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
     <div>
-      <h3>Top-5 регионов с наименьшим потреблением</h3>
-      <table id="bottom5-table">
-        <thead><tr><th>Регион</th><th>Потребление</th></tr></thead>
+      <h3 class="font-bold mb-2">Top-5 регионов с наименьшим потреблением</h3>
+      <table id="bottom5-table" class="w-full text-sm">
+        <thead><tr><th class="text-left">Регион</th><th class="text-right">Потребление</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -66,165 +59,148 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    // Инициализация карты
-    const map = L.map('map', { center:[55.5,37.6], zoom:4, worldCopyJump:true });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://carto.com/attributions">CartoDB</a> &amp; OpenStreetMap'
+    // Инициализация карты и слоёв
+    const map = L.map('map', { center: [55.5, 37.6], zoom: 4, worldCopyJump: true });
+    const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; CartoDB & OpenStreetMap'
     }).addTo(map);
-    map.attributionControl.setPrefix(`Custom Attribution`)
-    // Lazy-loading heatmap
-    let heatLayer=null, heatLoadedYear=null;
-    const blankHeatLayer=L.layerGroup();
+    map.attributionControl.setPrefix('Custom Attribution');
 
+    let geoData;
+    let choroplethLayer = L.geoJSON().addTo(map);
+    let changeLayer     = L.geoJSON().addTo(map);
 
-    // Глобальные переменные
-    const yearRange=document.getElementById('year-range'),
-          yearLabel=document.getElementById('year-label'),
-          playBtn=document.getElementById('play-btn'),
-          pauseBtn=document.getElementById('pause-btn'),
-          regionsLoadingEl=document.getElementById('regions-loading'),
-          searchInput=document.getElementById('region-search'),
-          searchBtn=document.getElementById('search-btn');
-    const MIN_YEAR=+yearRange.min, MAX_YEAR=+yearRange.max;
-    let playInterval=null, debounceTimer=null;
-    let geoData=null, regionLayer=null, choroplethLayer=null, legend=null, tempSearchLayer=null;
+    // Панель слоёв
+    const layerControl = L.control.layers(
+      { 'Базовая карта': baseLayer },
+      {
+        'Градиент потребления': choroplethLayer,
+        'Изменение к прошлому году': changeLayer
+      },
+      { collapsed: false }
+    ).addTo(map);
 
-    // Анимация троеточия
-    let ellipsisCount=0;
-    regionsLoadingEl.textContent='Загрузка регионов';
-    const regLoadInterval=setInterval(()=>{
-      ellipsisCount=(ellipsisCount+1)%4;
-      regionsLoadingEl.textContent='Загрузка регионов'+'.'.repeat(ellipsisCount);
-    },500);
+    // Элементы управления
+    const yearRange = document.getElementById('year-range');
+    const yearLabel = document.getElementById('year-label');
+    const playBtn   = document.getElementById('play-btn');
+    const pauseBtn  = document.getElementById('pause-btn');
+    const searchBtn = document.getElementById('search-btn');
+    const searchInput = document.getElementById('region-search');
+    const MIN_YEAR = +yearRange.min, MAX_YEAR = +yearRange.max;
+    let playInterval, debounceTimer;
 
-    // Загрузка регионов и отрисовка границ
+    // Динамика загрузки
     fetch('/api/regions')
-      .then(r=>r.json())
-      .then(json=>{
-        geoData=json;
-        clearInterval(regLoadInterval);
-        regionsLoadingEl.style.display='none';
-        yearRange.disabled=false; playBtn.disabled=false;
-        console.log('Sample regions:', geoData.features.slice(0,3)); // отладка
-        regionLayer=L.geoJSON(geoData, { style:{ color:'#444', weight:1, fill:false } }).addTo(map);
+      .then(r => r.json())
+      .then(data => {
+        geoData = data;
+        yearRange.disabled = false;
+        playBtn.disabled = false;
         updateData(+yearRange.value);
       })
-      .catch(err=>{
-        clearInterval(regLoadInterval);
-        regionsLoadingEl.textContent='Не удалось загрузить регионы';
-        console.error(err);
-      });
+      .catch(console.error);
 
-
-    // Поиск региона
-    searchBtn.addEventListener('click',()=>{
-      const term=searchInput.value.trim().toLowerCase();
-      if(!term||!geoData) return;
-      const feat=geoData.features.find(f=>f.properties.name.toLowerCase().includes(term));
-      if(feat){
-        if(tempSearchLayer) map.removeLayer(tempSearchLayer);
-        tempSearchLayer=L.geoJSON(feat, {
-          style: {
-            color: '#FFD700',      // золотой контур
-            weight: 3,
-            fillColor: '#FFFF00',  // желтая заливка
-            fillOpacity: 0.3        // полупрозрачная
-          }
-        }).addTo(map);
-        map.fitBounds(tempSearchLayer.getBounds(), { maxZoom:6 });
-        setTimeout(()=>{ map.removeLayer(tempSearchLayer); },3000);
+    // Обработчики
+    yearRange.addEventListener('input', () => {
+      const y = +yearRange.value;
+      yearLabel.textContent = y;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => updateData(y), 300);
+    });
+    playBtn.addEventListener('click', () => {
+      playBtn.disabled = true;
+      pauseBtn.disabled = false;
+      playInterval = setInterval(() => {
+        let y = +yearRange.value;
+        y = y < MAX_YEAR ? y + 1 : MIN_YEAR;
+        yearRange.value = y;
+        yearLabel.textContent = y;
+        updateData(y);
+      }, 1000);
+    });
+    pauseBtn.addEventListener('click', () => {
+      clearInterval(playInterval);
+      playBtn.disabled = false;
+      pauseBtn.disabled = true;
+    });
+    searchBtn.addEventListener('click', () => {
+      const term = searchInput.value.trim().toLowerCase();
+      if (!geoData || !term) return;
+      const feat = geoData.features.find(f => f.properties.name.toLowerCase().includes(term));
+      if (feat) {
+        const layer = L.geoJSON(feat, { style: { color: '#FFD700', weight: 3, fillOpacity: 0.3 } }).addTo(map);
+        map.fitBounds(layer.getBounds(), { maxZoom: 6 });
+        setTimeout(() => map.removeLayer(layer), 3000);
       } else alert('Регион не найден');
     });
 
-    // Play/Pause
-    playBtn.addEventListener('click',()=>{
-      playBtn.disabled=true; pauseBtn.disabled=false;
-      playInterval=setInterval(()=>{
-        let y=+yearRange.value;
-        y=y<MAX_YEAR?y+1:MIN_YEAR;
-        yearRange.value=y; yearLabel.textContent=y;
-        updateData(y);
-      },1000);
-    });
-    pauseBtn.addEventListener('click',()=>{
-      clearInterval(playInterval);
-      playBtn.disabled=false; pauseBtn.disabled=true;
-    });
-
-    // Debounce слайдера
-    yearRange.addEventListener('input',e=>{
-      const y=+e.target.value;
-      yearLabel.textContent=y;
-      clearTimeout(debounceTimer);
-      debounceTimer=setTimeout(()=>updateData(y),300);
-    });
-
-    // Обновление данных
-    function updateData(year){
-      if(!geoData?.features) return;
-      const prevYear=year-1;
+    // Обновление данных и слоёв
+    function updateData(year) {
+      const prevYear = year - 1;
       Promise.all([
-        fetch(`/api/consumption?period=${year}`).then(r=>r.json()),
-        fetch(`/api/consumption?period=${prevYear}`).then(r=>r.json()).catch(()=>[])
-      ])
-      .then(([currData,prevData])=>{
-        console.log('Sample consumption:', currData.slice(0,5)); // отладка
-        const values={}, prevValues={};
-        currData.forEach(o=>values[o.region_code]=o.value);
-        prevData.forEach(o=>prevValues[o.region_code]=o.value);
-        const items=currData.map(o=>{
-          const code=o.region_code;
-          const feat=geoData.features.find(f=>f.properties.code===code);
-          const name=feat?.properties.name||'—';
-          const val=o.value; const prev=prevValues[code]||0;
-          let arrow=''; if(year>MIN_YEAR){ arrow=val>prev?'↑':val<prev?'↓':''; }
-          return{ code, name, value:val, arrow };
-        });
-        items.sort((a,b)=>b.value-a.value);
-        const top5=items.slice(0,5), bottom5=items.slice(-5).reverse();
-        const fmt={ minimumFractionDigits:1, maximumFractionDigits:1 };
-        document.querySelector('#top5-table tbody').innerHTML=top5.map(i=>
-          `<tr><td>${i.name}</td><td style="text-align:right">${i.value.toLocaleString(undefined,fmt)} млн кВт·ч <span class=\"arrow ${i.arrow==='↑'?'up':i.arrow==='↓'?'down':''}\">${i.arrow}</span></td></tr>`
-        ).join('');
-        document.querySelector('#bottom5-table tbody').innerHTML=bottom5.map(i=>
-          `<tr><td>${i.name}</td><td style="text-align:right">${i.value.toLocaleString(undefined,fmt)} млн кВт·ч <span class=\"arrow ${i.arrow==='↑'?'up':i.arrow==='↓'?'down':''}\">${i.arrow}</span></td></tr>`
-        ).join('');
-        if(choroplethLayer) map.removeLayer(choroplethLayer);
-        if(legend) map.removeControl(legend);
-        const maxV=top5[0]?.value||0;
-        choroplethLayer=L.geoJSON(geoData,{
-          style:f=>{ const v=values[f.properties.code]||0; const a=maxV?Math.min(v/maxV,1):0; return{ fillColor:v>0?`rgba(255,0,0,${a})`:'rgba(200,200,200,0.2)', color:'#555', weight:1, fillOpacity:0.7}; },
-          onEachFeature:(f,layer)=>{
-            const code=f.properties.code, name=f.properties.name, v=values[code]||0;
-            layer.bindTooltip(`<strong>${name}</strong><br/>Потребление: ${v.toLocaleString()} млн кВт·ч`);
-            layer.on('click',()=>{
-              const ts=Date.now(), cid=`chart-${code}-${ts}`;
-              const onOpen=e=>{ if(e.popup._source!==layer) return; map.off('popupopen',onOpen);
-                fetch(`/api/consumption/history?region_code=${code}`)
-                  .then(r=>r.json())
-                  .then(full=>{
-                    full.sort((a,b)=>a.period-b.period);
-                  new Chart(document.getElementById(cid).getContext('2d'),{
-                    type:'line', data:{ labels:full.map(d=>d.period), datasets:[{label:'Потребление, млн кВт·ч', data:full.map(d=>d.value), fill:false, tension:0.3}] },
-                    options:{ scales:{ x:{ title:{display:true,text:'Год'} }, y:{ title:{display:true,text:'млн кВт·ч'} } } }
-                  });
-                }).catch(console.error);
-              };
-              map.on('popupopen',onOpen);
-              layer.bindPopup(`<div class="chart-popup-wrapper"><h4>${name}</h4><canvas id="${cid}" class="chart-popup"></canvas></div>`,{ maxWidth:350 }).openPopup();
-            });
-          }
-        }).addTo(map);
-        legend=L.control({position:'bottomright'});
-        legend.onAdd=()=>{ const div=L.DomUtil.create('div','info legend'); div.innerHTML=`<div class="legend-gradient"></div><div class="legend-labels"><span>Мин</span><span>Макс</span></div>`;
-          const grades=[0],steps=5; for(let i=1;i<=steps;i++)grades.push(Math.round(maxV*i/steps)); grades.forEach((g,i)=>{ if(i<grades.length-1){ const from=grades[i],to=grades[i+1],alpha=maxV?((from+to)/2)/maxV:0; div.innerHTML+=`<i style="display:inline-block;width:18px;height:18px;background:rgba(255,0,0,${alpha});margin-right:4px;"></i>${from}–${to} млн кВт·ч<br/>`; }});
-          return div; };
-        legend.addTo(map);
-      }).catch(err=>console.error('Ошибка consumption:',err));
+        fetch(`/api/consumption?period=${year}`).then(r => r.json()),
+        fetch(`/api/consumption?period=${prevYear}`).then(r => r.json()).catch(() => [])
+      ]).then(([currData, prevData]) => {
+        const values = {}, prevValues = {};
+        currData.forEach(o => values[o.region_code] = o.value);
+        prevData.forEach(o => prevValues[o.region_code] = o.value);
+
+        // Градиентный слой
+        choroplethLayer.clearLayers();
+        const maxV = Math.max(...Object.values(values), 0);
+        L.geoJSON(geoData, {
+          style: f => {
+            const v = values[f.properties.code] || 0;
+            const alpha = maxV ? v / maxV : 0;
+            return { fillColor: `rgba(255,0,0,${alpha})`, color: '#555', weight: 1, fillOpacity: 0.7 };
+          },
+          onEachFeature: bindPopupAndTooltip
+        }).addTo(choroplethLayer);
+
+        // Слой сравнения
+        changeLayer.clearLayers();
+        L.geoJSON(geoData, {
+          style: f => {
+            const code = f.properties.code;
+            const curr = values[code] || 0;
+            const prev = prevValues[code] || 0;
+            const fill = curr > prev
+              ? 'rgba(0,200,0,0.6)'
+              : curr < prev
+                ? 'rgba(200,0,0,0.6)'
+                : 'rgba(150,150,150,0.4)';
+            return { fillColor: fill, color: '#333', weight: 1, fillOpacity: 0.7 };
+          },
+          onEachFeature: bindPopupAndTooltip
+        }).addTo(changeLayer);
+      }).catch(console.error);
     }
 
-    // Lazy-loading heatmap
-    map.on('overlayadd',async e=>{ if(e.name!=='Heatmap'||!geoData?.features) return; const year=+yearRange.value; if(heatLayer&&heatLoadedYear===year){ map.addLayer(heatLayer); return; } document.getElementById('heatmap-loading').style.display='block'; try{ const data=await fetch(`/api/consumption?period=${year}`).then(r=>r.json()); const points=geoData.features.map(f=>{ const ctr=L.geoJSON(f).getBounds().getCenter(); const val=data.find(d=>d.region_code===f.properties.code)?.value||0; return[ctr.lat,ctr.lng,val]; }); heatLayer=L.heatLayer(points,{radius:25}); heatLoadedYear=year; map.addLayer(heatLayer); }catch(err){ console.error(err); alert('Не удалось загрузить тепловую карту'); }finally{ document.getElementById('heatmap-loading').style.display='none'; } });
-    map.on('overlayremove',e=>{ if(e.name==='Heatmap'&&heatLayer) map.removeLayer(heatLayer); });
+    // Общая функция для popups и графиков
+    function bindPopupAndTooltip(f, layer) {
+      const code = f.properties.code;
+      const name = f.properties.name;
+      layer.bindTooltip(name);
+      layer.on('click', () => {
+        const cid = `chart-${code}-${Date.now()}`;
+        const popupContent = `
+          <div class="chart-popup-wrapper"><h4>${name}</h4><canvas id="${cid}" class="chart-popup"></canvas></div>
+        `;
+        layer.bindPopup(popupContent, { maxWidth: 350 }).openPopup();
+        map.once('popupopen', () => {
+          fetch(`/api/consumption/history?region_code=${code}`)
+            .then(r => r.json())
+            .then(full => {
+              full.sort((a, b) => a.period - b.period);
+              new Chart(document.getElementById(cid).getContext('2d'), {
+                type: 'line',
+                data: { labels: full.map(d => d.period), datasets: [{ label: 'Потребление, млн кВт·ч', data: full.map(d => d.value), fill: false, tension: 0.3 }] },
+                options: { scales: { x: { title: { display: true, text: 'Год' } }, y: { title: { display: true, text: 'млн кВт·ч' } } } }
+              });
+            });
+        });
+      });
+    }
   </script>
 {% endblock %}
