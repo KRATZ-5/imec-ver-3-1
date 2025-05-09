@@ -8,6 +8,10 @@ from app.routers import views, auth, api_regions, api_consumption, admin
 from fastapi.exception_handlers import http_exception_handler as default_http_handler
 import urllib.parse
 from app.routers import admin
+from database.db import engine
+from database.models import Base
+
+Base.metadata.create_all(bind=engine)
 app = FastAPI()
 app.include_router(admin.router)
 static_path = os.path.join(BASE_DIR, "app", "static")
