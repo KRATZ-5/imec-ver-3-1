@@ -1,7 +1,10 @@
 {% extends "layout.html" %}
 {% block title %}Карта{% endblock %}
 {% block content %}
-  <head><link rel="stylesheet" href="/static/styles.css"></head>
+  <!-- Подключение внешнего CSS -->
+  <head>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
   <h2 class="mb-4">Карта потребления электроэнергии регионами РФ</h2>
 
   <!-- Поиск региона -->
@@ -158,7 +161,7 @@
         L.geoJSON(geoData, {
           style: f => {
             const v = values[f.properties.code] || 0;
-            return { fillColor: `rgba(255,0,0,${maxV ? v/ maxV : 0})`, fillOpacity: 0.7, weight: 1 };
+            return { fillColor: `rgba(255,0,0,${maxV ? v / maxV : 0})`, fillOpacity: 0.7, weight: 1 };
           },
           onEachFeature: setupFeature
         }).addTo(choroplethLayer);
@@ -181,7 +184,8 @@
       const name = f.properties.name;
       layer.bindTooltip(name);
       layer.on('click', () => {
-        const cid = `chart-${code}`; // постоянный ID для региона
+        map.closePopup();
+        const cid = `chart-${code}`;
         const popupContent = `
           <div class="chart-popup-wrapper">
             <h4>${name}</h4>
@@ -202,7 +206,9 @@
         .then(r => r.json())
         .then(data => {
           data.sort((a, b) => a.period - b.period);
-          new Chart(canvas.getContext('2d'), {
+          const ctx = canvas.getContext('2d');
+          if (ctx._chart) ctx._chart.destroy();
+          ctx._chart = new Chart(ctx, {
             type: 'line',
             data: {
               labels: data.map(d => d.period),
