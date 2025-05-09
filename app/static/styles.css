@@ -115,6 +115,7 @@ nav a { margin-right: 10px; text-decoration: none; color: #333; }
   width: 100%;
   height: 240px;
 }
+.leaflet-attribution-flag { display: none !important; }
 .leaflet-interactive {
   stroke: rgba(0,0,0,0.3) !important;
   stroke-width: 0.8 !important;
