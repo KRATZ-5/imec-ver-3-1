@@ -81,15 +81,6 @@ async def import_consumption_csv(csv_file: UploadFile) -> int:
     данные только для годов, присутствующих в файле.
     Возвращает количество импортированных записей.
     """
-    # 1. Чтение CSV
-    csv_file.file.seek(0)
-    try:
-        df = pd.read_csv(
-            io.TextIOWrapper(csv_file.file, encoding='utf-8-sig'),
-            dtype={'region_code': int, 'region': str, 'period': int, 'value': float}
-        )
-    except Exception as e:
-        raise ValueError(f"Error reading CSV: {e}")
 
     # 1. Читаем всё тело файла в память и создаём текстовый буфер
     try:
