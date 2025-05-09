@@ -69,14 +69,10 @@
     let choroplethLayer = L.geoJSON().addTo(map);
     let changeLayer     = L.geoJSON().addTo(map);
 
-    L.control.layers(
-      { 'Базовая карта': baseLayer },
-      {
-        'Градиент потребления': choroplethLayer,
-        'Изменение к прошлому году': changeLayer
-      },
-      { collapsed: false }
-    ).addTo(map);
+    L.control.layers({ 'Базовая карта': baseLayer }, {
+      'Градиент потребления': choroplethLayer,
+      'Изменение к прошлому году': changeLayer
+    }, { collapsed: false }).addTo(map);
 
     const yearRange = document.getElementById('year-range');
     const yearLabel = document.getElementById('year-label');
@@ -140,16 +136,23 @@
 
         // Обновить Top5/Bottom5
         const items = currData.map(o => {
-          const prev = prevValues[o.region_code] || 0;
-          return { code: o.region_code, name: '', value: o.value, prev };
+          const code = o.region_code;
+          const name = geoData.features.find(f => f.properties.code === code)?.properties.name || code;
+          const prev = prevValues[code] || 0;
+          const val = o.value;
+          const arrow = year > MIN_YEAR ? (val > prev ? '↑' : val < prev ? '↓' : '') : '';
+          const color = arrow === '↑' ? 'text-green-500' : arrow === '↓' ? 'text-red-500' : '';
+          return { code, name, value: val, prev, arrow, color };
         });
         items.sort((a,b) => b.value - a.value);
         const top5 = items.slice(0,5), bottom5 = items.slice(-5).reverse();
         const fmt = { minimumFractionDigits:1, maximumFractionDigits:1 };
-        document.querySelector('#top5-table tbody').innerHTML =
-          top5.map(i => `<tr><td>${i.name || i.code}</td><td class="text-right">${i.value.toLocaleString(undefined,fmt)}</td></tr>`).join('');
-        document.querySelector('#bottom5-table tbody').innerHTML =
-          bottom5.map(i => `<tr><td>${i.name || i.code}</td><td class="text-right">${i.value.toLocaleString(undefined,fmt)}</td></tr>`).join('');
+        document.querySelector('#top5-table tbody').innerHTML = top5.map(i =>
+          `<tr><td>${i.name}</td><td class="text-right">${i.value.toLocaleString(undefined,fmt)} млн кВт·ч <span class="font-bold ${i.color}">${i.arrow}</span></td></tr>`
+        ).join('');
+        document.querySelector('#bottom5-table tbody').innerHTML = bottom5.map(i =>
+          `<tr><td>${i.name}</td><td class="text-right">${i.value.toLocaleString(undefined,fmt)} млн кВт·ч <span class="font-bold ${i.color}">${i.arrow}</span></td></tr>`
+        ).join('');
 
         // Градиентный слой
         choroplethLayer.clearLayers();
@@ -178,7 +181,7 @@
 
     function featureInit(f, layer) {
       const code = f.properties.code;
-      let name = f.properties.name;
+      const name = f.properties.name;
       layer.bindTooltip(`<strong>${name}</strong>`);
       layer.on('click', () => {
         const cid = `chart-${code}-${Date.now()}`;
@@ -190,7 +193,7 @@
             .then(r=>r.json()).then(full=>{
               full.sort((a,b)=>a.period-b.period);
               new Chart(document.getElementById(cid).getContext('2d'),{
-                type:'line', data:{ labels:full.map(d=>d.period), datasets:[{label:'Потребление', data:full.map(d=>d.value), fill:false,tension:0.3}]},
+                type:'line', data:{ labels:full.map(d=>d.period), datasets:[{label:'Потребление, млн кВт·ч', data:full.map(d=>d.value), fill:false,tension:0.3}]},
                 options:{ scales:{ x:{ title:{display:true,text:'Год'}}, y:{ title:{display:true,text:'млн кВт·ч'}} }}
               });
             });
