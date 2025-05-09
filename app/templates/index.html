@@ -1,34 +1,23 @@
 {% extends "layout.html" %}
 {% block title %}Карта{% endblock %}
 {% block content %}
-  <!-- Подключение внешнего CSS -->
-  <head>
-    <link rel="stylesheet" href="/static/styles.css">
-  </head>
+  <head><link rel="stylesheet" href="/static/styles.css"></head>
   <h2 class="mb-4">Карта потребления электроэнергии регионами РФ</h2>
 
   <!-- Поиск региона -->
   <div class="search-container mb-4">
-    <input type="text" id="region-search" placeholder="Поиск региона..." aria-label="Search region" />
-    <button id="search-btn" type="button">Найти</button>
+    <input id="region-search" placeholder="Поиск региона..." />
+    <button id="search-btn">Найти</button>
   </div>
 
   <!-- Слайдер и Play/Pause -->
   <div class="controls mb-4 flex items-center space-x-4">
     <div>
-      <label for="year-range">Год: <span id="year-label">{{ max_year }}</span></label><br/>
-      <input
-        type="range"
-        id="year-range"
-        min="{{ min_year }}"
-        max="{{ max_year }}"
-        value="{{ max_year }}"
-        step="1"
-        disabled
-      />
+      <label for="year-range">Год: <span id="year-label">{{ max_year }}</span></label><br />
+      <input id="year-range" type="range" min="{{ min_year }}" max="{{ max_year }}" value="{{ max_year }}" disabled />
     </div>
-    <button id="play-btn" type="button" disabled>▶️ Play</button>
-    <button id="pause-btn" type="button" disabled>⏸ Pause</button>
+    <button id="play-btn" disabled class="px-4 py-2 bg-blue-500 text-white rounded">▶ Play</button>
+    <button id="pause-btn" disabled class="px-4 py-2 bg-blue-500 text-white rounded">⏸ Pause</button>
   </div>
 
   <!-- Контейнер для карты -->
@@ -37,14 +26,14 @@
   <!-- Инфопанель Top-5 / Bottom-5 -->
   <div id="info-panel" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
     <div>
-      <h3 class="font-bold mb-2">Top-5 регионов с наибольшим потреблением</h3>
+      <h3 class="font-bold mb-2">Top-5 регионов (макс)</h3>
       <table id="top5-table" class="w-full text-sm">
         <thead><tr><th class="text-left">Регион</th><th class="text-right">Потребление</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
     <div>
-      <h3 class="font-bold mb-2">Top-5 регионов с наименьшим потреблением</h3>
+      <h3 class="font-bold mb-2">Top-5 регионов (мин)</h3>
       <table id="bottom5-table" class="w-full text-sm">
         <thead><tr><th class="text-left">Регион</th><th class="text-right">Потребление</th></tr></thead>
         <tbody></tbody>
@@ -53,12 +42,12 @@
   </div>
 
   <!-- Leaflet и Chart.js -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <link href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" rel="stylesheet" />
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
+    // Инициализация карты и слоёв
     const map = L.map('map', { center: [55.5, 37.6], zoom: 4 });
     const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; CartoDB & OpenStreetMap'
@@ -67,22 +56,27 @@
 
     let geoData;
     let choroplethLayer = L.geoJSON().addTo(map);
-    let changeLayer     = L.geoJSON().addTo(map);
+    let changeLayer = L.geoJSON().addTo(map);
 
+    // Панель переключения слоёв
     L.control.layers({ 'Базовая карта': baseLayer }, {
       'Градиент потребления': choroplethLayer,
       'Изменение к прошлому году': changeLayer
     }, { collapsed: false }).addTo(map);
 
+    // Элементы управления
     const yearRange = document.getElementById('year-range');
     const yearLabel = document.getElementById('year-label');
-    const playBtn   = document.getElementById('play-btn');
-    const pauseBtn  = document.getElementById('pause-btn');
+    const playBtn = document.getElementById('play-btn');
+    const pauseBtn = document.getElementById('pause-btn');
     const searchBtn = document.getElementById('search-btn');
     const searchInput = document.getElementById('region-search');
+    const topT = document.querySelector('#top5-table tbody');
+    const botT = document.querySelector('#bottom5-table tbody');
     const MIN_YEAR = +yearRange.min, MAX_YEAR = +yearRange.max;
     let playInterval, debounceTimer;
 
+    // Загрузка регионов
     fetch('/api/regions')
       .then(r => r.json())
       .then(data => {
@@ -93,14 +87,14 @@
       })
       .catch(console.error);
 
+    // Слушатели слайдера и кнопок
     yearRange.addEventListener('input', () => {
-      const y = +yearRange.value;
-      yearLabel.textContent = y;
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => updateData(y), 300);
+      debounceTimer = setTimeout(() => updateData(+yearRange.value), 300);
     });
     playBtn.addEventListener('click', () => {
-      playBtn.disabled = true; pauseBtn.disabled = false;
+      playBtn.disabled = true;
+      pauseBtn.disabled = false;
       playInterval = setInterval(() => {
         let y = +yearRange.value;
         y = y < MAX_YEAR ? y + 1 : MIN_YEAR;
@@ -111,7 +105,8 @@
     });
     pauseBtn.addEventListener('click', () => {
       clearInterval(playInterval);
-      playBtn.disabled = false; pauseBtn.disabled = true;
+      playBtn.disabled = false;
+      pauseBtn.disabled = true;
     });
     searchBtn.addEventListener('click', () => {
       const term = searchInput.value.trim().toLowerCase();
@@ -119,12 +114,14 @@
       const feat = geoData.features.find(f => f.properties.name.toLowerCase().includes(term));
       if (feat) {
         const layer = L.geoJSON(feat, { style: { color: '#FFD700', weight: 3, fillOpacity: 0.3 } }).addTo(map);
-        map.fitBounds(layer.getBounds(), { maxZoom: 6 });
+        map.fitBounds(layer.getBounds());
         setTimeout(() => map.removeLayer(layer), 3000);
       } else alert('Регион не найден');
     });
 
+    // Основная функция обновления данных и слоёв
     function updateData(year) {
+      yearLabel.textContent = year;
       const prevYear = year - 1;
       Promise.all([
         fetch(`/api/consumption?period=${year}`).then(r => r.json()),
@@ -134,67 +131,69 @@
         currData.forEach(o => values[o.region_code] = o.value);
         prevData.forEach(o => prevValues[o.region_code] = o.value);
 
-        // Обновить Top5/Bottom5
-        const items = currData.map(o => {
+        // Обновляем Top-5 и Bottom-5
+        const arr = currData.map(o => {
           const code = o.region_code;
           const name = geoData.features.find(f => f.properties.code === code)?.properties.name || code;
-          const prev = prevValues[code] || 0;
-          const val = o.value;
-          const arrow = year > MIN_YEAR ? (val > prev ? '↑' : val < prev ? '↓' : '') : '';
-          const color = arrow === '↑' ? 'text-green-500' : arrow === '↓' ? 'text-red-500' : '';
-          return { code, name, value: val, prev, arrow, color };
+          const v = o.value;
+          const pv = prevValues[code] || 0;
+          const arrow = year > MIN_YEAR ? (v > pv ? '↑' : v < pv ? '↓' : '') : '';
+          const color = v > pv ? 'text-green-500' : v < pv ? 'text-red-500' : '';
+          return { code, name, v, pv, arrow, color };
         });
-        items.sort((a,b) => b.value - a.value);
-        const top5 = items.slice(0,5), bottom5 = items.slice(-5).reverse();
-        const fmt = { minimumFractionDigits:1, maximumFractionDigits:1 };
-        document.querySelector('#top5-table tbody').innerHTML = top5.map(i =>
-          `<tr><td>${i.name}</td><td class="text-right">${i.value.toLocaleString(undefined,fmt)} млн кВт·ч <span class="font-bold ${i.color}">${i.arrow}</span></td></tr>`
+        arr.sort((a, b) => b.v - a.v);
+        const top5 = arr.slice(0, 5), bottom5 = arr.slice(-5).reverse();
+        const fmt = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+        topT.innerHTML = top5.map(i =>
+          `<tr><td>${i.name}</td><td class="text-right">${i.v.toLocaleString(undefined, fmt)} млн кВт·ч <span class="${i.color}">${i.arrow}</span></td></tr>`
         ).join('');
-        document.querySelector('#bottom5-table tbody').innerHTML = bottom5.map(i =>
-          `<tr><td>${i.name}</td><td class="text-right">${i.value.toLocaleString(undefined,fmt)} млн кВт·ч <span class="font-bold ${i.color}">${i.arrow}</span></td></tr>`
+        botT.innerHTML = bottom5.map(i =>
+          `<tr><td>${i.name}</td><td class="text-right">${i.v.toLocaleString(undefined, fmt)} млн кВт·ч <span class="${i.color}">${i.arrow}</span></td></tr>`
         ).join('');
 
-        // Градиентный слой
+        // Обновляем градиентный слой
         choroplethLayer.clearLayers();
         const maxV = Math.max(...Object.values(values), 0);
         L.geoJSON(geoData, {
           style: f => {
             const v = values[f.properties.code] || 0;
-            return { fillColor: `rgba(255,0,0,${maxV? v/maxV:0})`, color:'#555', weight:1, fillOpacity:0.7 };
+            return { fillColor: `rgba(255,0,0,${maxV ? v/maxV : 0})`, fillOpacity: 0.7, weight: 1 };
           },
-          onEachFeature: featureInit
+          onEachFeature: setupFeature
         }).addTo(choroplethLayer);
 
-        // Слой сравнения
+        // Обновляем слой изменений
         changeLayer.clearLayers();
         L.geoJSON(geoData, {
           style: f => {
             const code = f.properties.code;
-            const curr = values[code]||0, prev = prevValues[code]||0;
-            const fill = curr>prev?'rgba(0,200,0,0.6)':curr<prev?'rgba(200,0,0,0.6)':'rgba(150,150,150,0.4)';
-            return { fillColor:fill, color:'#333', weight:1, fillOpacity:0.7 };
+            const curr = values[code] || 0;
+            const prev = prevValues[code] || 0;
+            const fill = curr > prev ? 'rgba(0,200,0,0.6)' : curr < prev ? 'rgba(200,0,0,0.6)' : 'rgba(150,150,150,0.4)';
+            return { fillColor: fill, fillOpacity: 0.7, weight: 1 };
           },
-          onEachFeature: featureInit
+          onEachFeature: setupFeature
         }).addTo(changeLayer);
       }).catch(console.error);
     }
 
-    function featureInit(f, layer) {
+    // Настройка всплывающих подсказок и графиков
+    function setupFeature(f, layer) {
       const code = f.properties.code;
       const name = f.properties.name;
-      layer.bindTooltip(`<strong>${name}</strong>`);
+      layer.bindTooltip(name);
       layer.on('click', () => {
         const cid = `chart-${code}-${Date.now()}`;
-        layer.bindPopup(`<div class="chart-popup-wrapper"><h4>${name}</h4><canvas id="${cid}" class="chart-popup"></canvas></div>`,{maxWidth:350}).openPopup();
-        map.on('popupopen', function onOpen(e){
-          if(e.popup._source!==layer) return;
-          map.off('popupopen', onOpen);
+        layer.bindPopup(`<div class="chart-popup-wrapper"><h4>${name}</h4><canvas id="${cid}" class="chart-popup" width="300" height="200"></canvas></div>`, { maxWidth: 350 }).openPopup();
+        map.once('popupopen', () => {
           fetch(`/api/consumption/history?region_code=${code}`)
-            .then(r=>r.json()).then(full=>{
-              full.sort((a,b)=>a.period-b.period);
-              new Chart(document.getElementById(cid).getContext('2d'),{
-                type:'line', data:{ labels:full.map(d=>d.period), datasets:[{label:'Потребление, млн кВт·ч', data:full.map(d=>d.value), fill:false,tension:0.3}]},
-                options:{ scales:{ x:{ title:{display:true,text:'Год'}}, y:{ title:{display:true,text:'млн кВт·ч'}} }}
+            .then(r => r.json())
+            .then(data => {
+              data.sort((a, b) => a.period - b.period);
+              new Chart(document.getElementById(cid).getContext('2d'), {
+                type: 'line',
+                data: { labels: data.map(d => d.period), datasets: [{ label: 'Потребление, млн кВт·ч', data: data.map(d => d.value), fill: false, tension: 0.3 }] },
+                options: { scales: { x: { title: { display: true, text: 'Год' } }, y: { title: { display: true, text: 'млн кВт·ч' } } } }
               });
             });
         });
