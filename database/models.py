@@ -1,7 +1,6 @@
 # database/models.py
 from sqlalchemy import Column, Integer, Text, Numeric, DateTime, func
 from sqlalchemy.ext.declarative import declarative_base
-from geoalchemy2 import Geometry
 
 Base = declarative_base()
 
