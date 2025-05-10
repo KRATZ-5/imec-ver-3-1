@@ -50,33 +50,79 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    // Инициализация карты и слоёв
+    // 1) Инициализация карты и базового слоя
     const map = L.map('map', { center: [55.5, 37.6], zoom: 4 });
     const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; CartoDB & OpenStreetMap'
     }).addTo(map);
     map.attributionControl.setPrefix('Custom Attribution');
 
+    // 2) Создание пустых geoJSON-слоёв
     let geoData;
     let choroplethLayer = L.geoJSON().addTo(map);
-    let changeLayer = L.geoJSON().addTo(map);
+    let changeLayer     = L.geoJSON().addTo(map);
 
-    // Панель переключения слоёв
-    L.control.layers({ 'Базовая карта': baseLayer }, {
-      'Градиент потребления': choroplethLayer,
-      'Изменение к прошлому году': changeLayer
-    }, { collapsed: false }).addTo(map);
+    // 3) HTML для легенд
+    const gradientLegendHtml = `
+      <h4>Потребление (млн кВт·ч)</h4>
+      <i style="background: rgba(255,0,0,0)"></i> 0<br>
+      <i style="background: rgba(255,0,0,0.25)"></i> 25% от макс<br>
+      <i style="background: rgba(255,0,0,0.5)"></i> 50% от макс<br>
+      <i style="background: rgba(255,0,0,0.75)"></i> 75% от макс<br>
+      <i style="background: rgba(255,0,0,1)"></i> 100% от макс
+    `;
+    const changeLegendHtml = `
+      <h4>Изменение к прошлому году</h4>
+      <i style="background: rgba(200,0,0,0.6)"></i> Снижение<br>
+      <i style="background: rgba(150,150,150,0.4)"></i> Без изменений<br>
+      <i style="background: rgba(0,200,0,0.6)"></i> Рост
+    `;
+
+    // 4) Панель переключения слоёв
+    L.control.layers(
+      { 'Базовая карта': baseLayer },
+      {
+        'Градиент потребления': choroplethLayer,
+        'Изменение к прошлому году': changeLayer
+      },
+      { collapsed: false }
+    ).addTo(map);
+
+    // 5) Создание и добавление легенды
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = () => {
+      const div = L.DomUtil.create('div', 'info legend');
+      div.style.background = 'white';
+      div.style.padding    = '6px';
+      div.style.lineHeight = '1.2em';
+      return div;
+    };
+    legend.addTo(map);
+    legend.getContainer().innerHTML = gradientLegendHtml; // стартовое состояние
+
+    // 6) Переключение легенды при смене оверлеев
+    map.on('overlayadd overlayremove', () => {
+      if (map.hasLayer(choroplethLayer) && !map.hasLayer(changeLayer)) {
+        legend.getContainer().innerHTML = gradientLegendHtml;
+      } else if (map.hasLayer(changeLayer) && !map.hasLayer(choroplethLayer)) {
+        legend.getContainer().innerHTML = changeLegendHtml;
+      } else {
+        legend.getContainer().innerHTML = '';
+      }
+    });
+
+    // ==== ДАЛЕЕ — ВАШ СУЩЕСТВУЮЩИЙ КОД ====
 
     // Элементы управления
-    const yearRange = document.getElementById('year-range');
-    const yearLabel = document.getElementById('year-label');
-    const playBtn = document.getElementById('play-btn');
-    const pauseBtn = document.getElementById('pause-btn');
-    const searchBtn = document.getElementById('search-btn');
+    const yearRange   = document.getElementById('year-range');
+    const yearLabel   = document.getElementById('year-label');
+    const playBtn     = document.getElementById('play-btn');
+    const pauseBtn    = document.getElementById('pause-btn');
+    const searchBtn   = document.getElementById('search-btn');
     const searchInput = document.getElementById('region-search');
-    const topT = document.querySelector('#top5-table tbody');
-    const botT = document.querySelector('#bottom5-table tbody');
-    const MIN_YEAR = +yearRange.min, MAX_YEAR = +yearRange.max;
+    const topT        = document.querySelector('#top5-table tbody');
+    const botT        = document.querySelector('#bottom5-table tbody');
+    const MIN_YEAR    = +yearRange.min, MAX_YEAR = +yearRange.max;
     let playInterval, debounceTimer;
 
     // Загрузка регионов
@@ -85,7 +131,7 @@
       .then(data => {
         geoData = data;
         yearRange.disabled = false;
-        playBtn.disabled = false;
+        playBtn.disabled   = false;
         updateData(+yearRange.value);
       })
       .catch(console.error);
@@ -96,19 +142,19 @@
       debounceTimer = setTimeout(() => updateData(+yearRange.value), 300);
     });
     playBtn.addEventListener('click', () => {
-      playBtn.disabled = true;
+      playBtn.disabled  = true;
       pauseBtn.disabled = false;
       playInterval = setInterval(() => {
         let y = +yearRange.value;
         y = y < MAX_YEAR ? y + 1 : MIN_YEAR;
-        yearRange.value = y;
+        yearRange.value   = y;
         yearLabel.textContent = y;
         updateData(y);
       }, 1000);
     });
     pauseBtn.addEventListener('click', () => {
       clearInterval(playInterval);
-      playBtn.disabled = false;
+      playBtn.disabled  = false;
       pauseBtn.disabled = true;
     });
     searchBtn.addEventListener('click', () => {
@@ -134,18 +180,19 @@
         currData.forEach(o => values[o.region_code] = o.value);
         prevData.forEach(o => prevValues[o.region_code] = o.value);
 
-        // Обновляем Top-5 и Bottom-5
+        // Top-5 / Bottom-5
         const arr = currData.map(o => {
           const code = o.region_code;
           const name = geoData.features.find(f => f.properties.code === code)?.properties.name || code;
-          const v = o.value;
-          const pv = prevValues[code] || 0;
+          const v    = o.value;
+          const pv   = prevValues[code] || 0;
           const arrow = year > MIN_YEAR ? (v > pv ? '↑' : v < pv ? '↓' : '') : '';
           const colorStyle = v > pv ? 'color:green' : v < pv ? 'color:red' : '';
           return { code, name, v, arrow, colorStyle };
         });
         arr.sort((a, b) => b.v - a.v);
-        const top5 = arr.slice(0, 5), bottom5 = arr.slice(-5).reverse();
+        const top5    = arr.slice(0, 5),
+              bottom5 = arr.slice(-5).reverse();
         const fmt = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
         topT.innerHTML = top5.map(i =>
           `<tr><td>${i.name}</td><td>${i.v.toLocaleString(undefined, fmt)} млн кВт·ч <span style="${i.colorStyle}">${i.arrow}</span></td></tr>`
@@ -154,7 +201,7 @@
           `<tr><td>${i.name}</td><td>${i.v.toLocaleString(undefined, fmt)} млн кВт·ч <span style="${i.colorStyle}">${i.arrow}</span></td></tr>`
         ).join('');
 
-        // Обновляем слои
+        // Слои choropleth и change
         choroplethLayer.clearLayers();
         changeLayer.clearLayers();
         const maxV = Math.max(...Object.values(values), 0);
@@ -196,12 +243,12 @@
       });
     }
 
-    // Глобальный обработчик открытия попапа для отрисовки графика
+    // Отрисовка графика при открытии попапа
     map.on('popupopen', e => {
       const container = e.popup.getElement();
-      const canvas = container.querySelector('canvas');
+      const canvas    = container.querySelector('canvas');
       if (!canvas) return;
-      const regionCode = canvas.id.split('-')[1]; // работает и с новым id
+      const regionCode = canvas.id.split('-')[1];
       fetch(`/api/consumption/history?region_code=${regionCode}`)
         .then(r => r.json())
         .then(data => {
@@ -228,6 +275,5 @@
           });
         });
     });
-
   </script>
 {% endblock %}
