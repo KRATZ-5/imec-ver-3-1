@@ -456,6 +456,45 @@ input[type=range]::-moz-range-thumb {
   padding: .5rem;
 }
 
+/* Обёртки-карточки для таблиц */
+.top5, .bottom5 {
+  background: #ffffff;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 1rem;
+}
+
+/* Полосатый фон строк */
+.top5-table tbody tr:nth-child(odd),
+.bottom5-table tbody tr:nth-child(odd) {
+  background-color: #f9fafb;
+}
+
+/* Отступы в ячейках */
+.top5-table td, .bottom5-table td {
+  padding: 0.75rem 0.5rem;
+}
+
+/* Стрелки */
+.arrow {
+  font-size: 1.25rem;      /*  увеличить размер */
+  vertical-align: middle;
+  margin-left: 0.25rem;
+  display: inline-block;
+}
+.arrow.up   { color: #10b981; }
+.arrow.down { color: #ef4444; }
+
+
+
+
+
+
+
+
+
+
+
 
 @media (max-width: 600px) {
   .admin-card form {
