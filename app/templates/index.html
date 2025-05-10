@@ -31,18 +31,18 @@
 
   <!-- Инфопанель Top-5 / Bottom-5 -->
   <div id="info-panel" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-    <div>
+    <div class="top5">
       <h3 class="font-bold mb-2">Top-5 регионов (макс)</h3>
-      <table id="top5-table" class="w-full text-sm">
+      <table id="top5-table" class="top5-table w-full text-sm">
         <thead>
           <tr><th class="text-left">Регион</th><th class="text-right">Потребление</th></tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
-    <div>
-      <h3 class="font-bold mb-2">Top-5 регионов (мин)</h3>
-      <table id="bottom5-table" class="w-full text-sm">
+    <div class="bottom5">
+      <h3 class="font-bold mb-2">Bottom-5 регионов (мин)</h3>
+      <table id="bottom5-table" class="bottom5-table w-full text-sm">
         <thead>
           <tr><th class="text-left">Регион</th><th class="text-right">Потребление</th></tr>
         </thead>
@@ -129,7 +129,7 @@
       }
     });
 
-    // ==== Остальной код: загрузка, обновление слоёв, попапы и графики ====
+    //  загрузка, обновление слоёв, попапы и графики
 
     const yearRange   = document.getElementById('year-range');
     const yearLabel   = document.getElementById('year-label');
@@ -219,49 +219,41 @@
           legend.getContainer().innerHTML = buildGradientLegend(minV, maxV);
         }
 
-        // Top-5 / Bottom-5
-        const arr = currData.map(o => {
-          const code = o.region_code;
-          const name = geoData.features
-            .find(f => f.properties.code === code)
-            ?.properties.name || code;
-          const v    = o.value;
-          const pv   = prevValues[code] || 0;
-          return {
-            name,
-            v,
-            arrow: year > MIN_YEAR
-              ? (v > pv ? '↑' : v < pv ? '↓' : '')
-              : '',
-            colorStyle: v > pv
-              ? 'color:green'
-              : v < pv
-                ? 'color:red'
-                : ''
-          };
-        });
-        arr.sort((a, b) => b.v - a.v);
-        const top5    = arr.slice(0, 5);
-        const bottom5 = arr.slice(-5).reverse();
-        const fmtOpts = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+      // подготавливаем массив для таблиц
+      const arr = currData.map(o => {
+        const code = o.region_code;
+        const name = geoData.features.find(f => f.properties.code === code)?.properties.name || code;
+        const v = o.value;
+        const pv = prevValues[code] || 0;
+        const arrow = year > MIN_YEAR ? (v > pv ? '↑' : v < pv ? '↓' : '') : '';
+        const arrowClass = v > pv ? 'arrow up' : v < pv ? 'arrow down' : '';
+        return { name, v, arrow, arrowClass };
+      });
+      arr.sort((a, b) => b.v - a.v);
+      const top5 = arr.slice(0, 5);
+      const bottom5 = arr.slice(-5).reverse();
 
-        topT.innerHTML = top5.map(i =>
-          `<tr>
-            <td>${i.name}</td>
-            <td>${i.v.toLocaleString(undefined, fmtOpts)} млн кВт·ч
-              <span style="${i.colorStyle}">${i.arrow}</span>
-            </td>
-          </tr>`
-        ).join('');
+      // рендерим Top-5
+      topT.innerHTML = top5.map(i =>
+        `<tr>
+           <td>${i.name}</td>
+           <td class="text-right">
+             ${i.v.toLocaleString(undefined, fmtOpts)} млн&nbsp;
+             ${i.arrow ? `<span class="${i.arrowClass}">${i.arrow}</span>` : ''}
+           </td>
+         </tr>`
+      ).join('');
 
-        botT.innerHTML = bottom5.map(i =>
-          `<tr>
-            <td>${i.name}</td>
-            <td>${i.v.toLocaleString(undefined, fmtOpts)} млн кВт·ч
-              <span style="${i.colorStyle}">${i.arrow}</span>
-            </td>
-          </tr>`
-        ).join('');
+      // рендерим Bottom-5
+      botT.innerHTML = bottom5.map(i =>
+        `<tr>
+           <td>${i.name}</td>
+           <td class="text-right">
+             ${i.v.toLocaleString(undefined, fmtOpts)} млн&nbsp;
+             ${i.arrow ? `<span class="${i.arrowClass}">${i.arrow}</span>` : ''}
+           </td>
+         </tr>`
+      ).join('');
 
         // Перерисовка слоёв
         choroplethLayer.clearLayers();
