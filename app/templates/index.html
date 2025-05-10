@@ -120,8 +120,7 @@
     // 7) Переключение легенды по оверлеям
     map.on('overlayadd overlayremove', () => {
       if (map.hasLayer(choroplethLayer) && !map.hasLayer(changeLayer)) {
-        legend.getContainer().innerHTML =
-          buildGradientLegend(window.lastMinV, window.lastMaxV);
+        legend.getContainer().innerHTML = buildGradientLegend(window.lastMinV, window.lastMaxV);
       } else if (map.hasLayer(changeLayer) && !map.hasLayer(choroplethLayer)) {
         legend.getContainer().innerHTML = changeLegendHtml;
       } else {
@@ -129,8 +128,7 @@
       }
     });
 
-    //  загрузка, обновление слоёв, попапы и графики
-
+    // ==== Остальные элементы управления и логика ====;
     const yearRange   = document.getElementById('year-range');
     const yearLabel   = document.getElementById('year-label');
     const playBtn     = document.getElementById('play-btn');
@@ -139,8 +137,7 @@
     const searchInput = document.getElementById('region-search');
     const topT        = document.querySelector('#top5-table tbody');
     const botT        = document.querySelector('#bottom5-table tbody');
-    const MIN_YEAR    = +yearRange.min,
-          MAX_YEAR    = +yearRange.max;
+    const MIN_YEAR    = +yearRange.min, MAX_YEAR = +yearRange.max;
     let playInterval, debounceTimer;
 
     fetch('/api/regions')
@@ -176,18 +173,12 @@
     searchBtn.addEventListener('click', () => {
       const term = searchInput.value.trim().toLowerCase();
       if (!geoData || !term) return;
-      const feat = geoData.features.find(f =>
-        f.properties.name.toLowerCase().includes(term)
-      );
+      const feat = geoData.features.find(f => f.properties.name.toLowerCase().includes(term));
       if (feat) {
-        const layer = L.geoJSON(feat, {
-          style: { color: '#FFD700', weight: 3, fillOpacity: 0.3 }
-        }).addTo(map);
+        const layer = L.geoJSON(feat, { style: { color: '#FFD700', weight: 3, fillOpacity: 0.3 } }).addTo(map);
         map.fitBounds(layer.getBounds());
         setTimeout(() => map.removeLayer(layer), 3000);
-      } else {
-        alert('Регион не найден');
-      }
+      } else alert('Регион не найден');
     });
 
     function updateData(year) {
@@ -195,78 +186,63 @@
       const prevYear = year - 1;
       Promise.all([
         fetch(`/api/consumption?period=${year}`).then(r => r.json()),
-        fetch(`/api/consumption?period=${prevYear}`)
-          .then(r => r.json())
-          .catch(() => [])
+        fetch(`/api/consumption?period=${prevYear}`).then(r => r.json()).catch(() => [])
       ])
       .then(([currData, prevData]) => {
-        const values    = {};
-        const prevValues= {};
-        currData.forEach(o => values[o.region_code]    = o.value);
-        prevData.forEach(o => prevValues[o.region_code]= o.value);
+        const values    = {}, prevValues = {};
+        currData.forEach(o => values[o.region_code] = o.value);
+        prevData.forEach(o => prevValues[o.region_code] = o.value);
 
         const vals    = Object.values(values);
         const nonZero = vals.filter(v => v > 0);
         const minV    = nonZero.length ? Math.min(...nonZero) : 0;
         const maxV    = Math.max(...vals, 0);
-
-        // Сохраняем для легенды
         window.lastMinV = minV;
         window.lastMaxV = maxV;
 
-        // Обновляем легенду, если градиент-слой активен
         if (map.hasLayer(choroplethLayer) && !map.hasLayer(changeLayer)) {
           legend.getContainer().innerHTML = buildGradientLegend(minV, maxV);
         }
 
-      // подготавливаем массив для таблиц
-      const arr = currData.map(o => {
-        const code = o.region_code;
-        const name = geoData.features.find(f => f.properties.code === code)?.properties.name || code;
-        const v = o.value;
-        const pv = prevValues[code] || 0;
-        const arrow = year > MIN_YEAR ? (v > pv ? '↑' : v < pv ? '↓' : '') : '';
-        const arrowClass = v > pv ? 'arrow up' : v < pv ? 'arrow down' : '';
-        return { name, v, arrow, arrowClass };
-      });
-      arr.sort((a, b) => b.v - a.v);
-      const top5 = arr.slice(0, 5);
-      const bottom5 = arr.slice(-5).reverse();
+        const arr = currData.map(o => {
+          const code = o.region_code;
+          const name = geoData.features.find(f => f.properties.code === code)?.properties.name || code;
+          const v = o.value;
+          const pv = prevValues[code] || 0;
+          const arrow = year > MIN_YEAR ? (v > pv ? '↑' : v < pv ? '↓' : '') : '';
+          const arrowClass = v > pv ? 'arrow up' : v < pv ? 'arrow down' : '';
+          return { name, v, arrow, arrowClass };
+        });
+        arr.sort((a, b) => b.v - a.v);
+        const top5    = arr.slice(0, 5);
+        const bottom5 = arr.slice(-5).reverse();
+        const fmtOpts = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
 
-      // рендерим Top-5
-      topT.innerHTML = top5.map(i =>
-        `<tr>
-           <td>${i.name}</td>
-           <td class="text-right">
-             ${i.v.toLocaleString(undefined, fmtOpts)} млн&nbsp;
-             ${i.arrow ? `<span class="${i.arrowClass}">${i.arrow}</span>` : ''}
-           </td>
-         </tr>`
-      ).join('');
+        topT.innerHTML = top5.map(i =>
+          `<tr>
+             <td>${i.name}</td>
+             <td class="text-right">
+               ${i.v.toLocaleString(undefined, fmtOpts)} млн&nbsp;${i.arrow ? `<span class="${i.arrowClass}">${i.arrow}</span>` : ''}
+             </td>
+           </tr>`
+        ).join('');
 
-      // рендерим Bottom-5
-      botT.innerHTML = bottom5.map(i =>
-        `<tr>
-           <td>${i.name}</td>
-           <td class="text-right">
-             ${i.v.toLocaleString(undefined, fmtOpts)} млн&nbsp;
-             ${i.arrow ? `<span class="${i.arrowClass}">${i.arrow}</span>` : ''}
-           </td>
-         </tr>`
-      ).join('');
+        botT.innerHTML = bottom5.map(i =>
+          `<tr>
+             <td>${i.name}</td>
+             <td class="text-right">
+               ${i.v.toLocaleString(undefined, fmtOpts)} млн&nbsp;${i.arrow ? `<span class="${i.arrowClass}">${i.arrow}</span>` : ''}
+             </td>
+           </tr>`
+        ).join('');
 
-        // Перерисовка слоёв
         choroplethLayer.clearLayers();
         changeLayer.clearLayers();
 
         L.geoJSON(geoData, {
           style: f => {
             const v = values[f.properties.code] || 0;
-            return {
-              fillColor: `rgba(255,0,0,${ maxV ? v / maxV : 0 })`,
-              fillOpacity: 0.7,
-              weight: 1
-            };
+            return { fillColor: `rgba(255,0,0,${maxV ? v / maxV : 0})`, fillOpacity:0.7, weight:1 };
           },
           onEachFeature: setupFeature
         }).addTo(choroplethLayer);
@@ -276,12 +252,8 @@
             const code = f.properties.code;
             const curr = values[code] || 0;
             const prev = prevValues[code] || 0;
-            const fill = curr > prev
-              ? 'rgba(0,200,0,0.6)'
-              : curr < prev
-                ? 'rgba(200,0,0,0.6)'
-                : 'rgba(150,150,150,0.4)';
-            return { fillColor: fill, fillOpacity: 0.7, weight: 1 };
+            const fill = curr > prev ? 'rgba(0,200,0,0.6)' : curr < prev ? 'rgba(200,0,0,0.6)' : 'rgba(150,150,150,0.4)';
+            return { fillColor: fill, fillOpacity:0.7, weight:1 };
           },
           onEachFeature: setupFeature
         }).addTo(changeLayer);
@@ -302,7 +274,7 @@
             <canvas id="${cid}" width="300" height="200"></canvas>
           </div>`;
         layer.unbindPopup();
-        layer.bindPopup(popupContent, { maxWidth: 350 }).openPopup();
+        layer.bindPopup(popupContent, { maxWidth:350 }).openPopup();
       });
     }
 
@@ -314,26 +286,12 @@
       fetch(`/api/consumption/history?region_code=${regionCode}`)
         .then(r => r.json())
         .then(data => {
-          data.sort((a, b) => a.period - b.period);
+          data.sort((a,b)=>a.period-b.period);
           const ctx = canvas.getContext('2d');
-          if (ctx._chart) ctx._chart.destroy();
+          if(ctx._chart) ctx._chart.destroy();
           ctx._chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels: data.map(d => d.period),
-              datasets: [{
-                label: 'Потребление, млн кВт·ч',
-                data: data.map(d => d.value),
-                fill: false,
-                tension: 0.3
-              }]
-            },
-            options: {
-              scales: {
-                x: { title: { display: true, text: 'Год' } },
-                y: { title: { display: true, text: 'млн кВт·ч' } }
-              }
-            }
+            type:'line', data:{ labels:data.map(d=>d.period), datasets:[{ label:'Потребление, млн кВт·ч', data:data.map(d=>d.value), fill:false, tension:0.3 }]},
+            options:{ scales:{ x:{ title:{ display:true, text:'Год'}}, y:{ title:{ display:true, text:'млн кВт·ч'}} }}
           });
         });
     });
