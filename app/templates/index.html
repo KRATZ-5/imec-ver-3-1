@@ -1,12 +1,16 @@
 {% extends "layout.html" %}
 {% block title %}Карта{% endblock %}
 {% block content %}
-  <!-- Подключение внешнего CSS -->
   <head>
     <link rel="stylesheet" href="/static/styles.css">
   </head>
 
   <h2 class="mb-4">Карта потребления электроэнергии регионами РФ</h2>
+
+  <!-- Индикатор загрузки -->
+  <div id="loading-regions" class="p-4 bg-yellow-100 text-yellow-800 rounded mb-4" style="display:none;">
+    Загружаем регионы...
+  </div>
 
   <!-- Поиск региона -->
   <div class="search-container mb-4">
@@ -18,34 +22,28 @@
   <div class="controls mb-4 flex items-center space-x-4">
     <div>
       <label for="year-range">Год: <span id="year-label">{{ max_year }}</span></label><br />
-      <input id="year-range" type="range"
-             min="{{ min_year }}" max="{{ max_year }}"
-             value="{{ max_year }}" disabled />
+      <input id="year-range" type="range" min="{{ min_year }}" max="{{ max_year }}" value="{{ max_year }}" disabled />
     </div>
     <button id="play-btn" disabled class="px-4 py-2 bg-blue-500 text-white rounded">▶ Play</button>
     <button id="pause-btn" disabled class="px-4 py-2 bg-blue-500 text-white rounded">⏸ Pause</button>
   </div>
 
-  <!-- Контейнер для карты -->
+  <!-- Карта -->
   <div id="map" class="w-full h-96 mb-4"></div>
 
-  <!-- Инфопанель Top-5 / Bottom-5 -->
+  <!-- Top-5 / Bottom-5 -->
   <div id="info-panel" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
     <div class="top5">
       <h3 class="font-bold mb-2">Top-5 регионов (макс)</h3>
       <table id="top5-table" class="top5-table w-full text-sm">
-        <thead>
-          <tr><th class="text-left">Регион</th><th class="text-right">Потребление</th></tr>
-        </thead>
+        <thead><tr><th>Регион</th><th>Потребление</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
     <div class="bottom5">
       <h3 class="font-bold mb-2">Bottom-5 регионов (мин)</h3>
       <table id="bottom5-table" class="bottom5-table w-full text-sm">
-        <thead>
-          <tr><th class="text-left">Регион</th><th class="text-right">Потребление</th></tr>
-        </thead>
+        <thead><tr><th>Регион</th><th>Потребление</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -57,242 +55,201 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    // 1) Инициализация карты и базового слоя
-    const map = L.map('map', { center: [55.5, 37.6], zoom: 4 });
+    const map = L.map('map', { center:[55.5,37.6], zoom:4 });
     const baseLayer = L.tileLayer(
       'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      { attribution: '&copy; CartoDB & OpenStreetMap' }
+      { attribution:'© CartoDB & OpenStreetMap' }
     ).addTo(map);
-    map.attributionControl.setPrefix('Custom Attribution');
+    map.attributionControl.setPrefix('');
 
-    // 2) Пустые geoJSON-слои
-    let geoData;
-    let choroplethLayer = L.geoJSON().addTo(map);
-    let changeLayer     = L.geoJSON().addTo(map);
+    // слои и данные
+    let geoData, choroplethLayer=L.geoJSON().addTo(map), changeLayer=L.geoJSON().addTo(map);
 
-    // 3) Функция для динамической легенды градиента
-    function buildGradientLegend(minValue, maxValue) {
-      const fmt = v => v.toLocaleString(undefined, {
-        minimumFractionDigits: 1, maximumFractionDigits: 1
-      });
+    // легенда градиента
+    function buildGradientLegend(minV, maxV) {
+      const fmt=v=>v.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
       return `
         <div class="legend-gradient"></div>
         <div class="legend-labels">
-          <span>${fmt(minValue)} млн</span>
-          <span>${fmt(maxValue)} млн</span>
+          <span>${fmt(minV)} млн</span>
+          <span>${fmt(maxV)} млн</span>
         </div>
-        <div style="margin-top:4px; text-align:center;">Потребление (млн кВт·ч)</div>
-      `;
+        <div style="margin-top:4px;text-align:center;">Потребление (млн кВт·ч)</div>`;
     }
-
-    // 4) Статическая HTML для «Изменения к прошлому году»
-    const changeLegendHtml = `
+    const changeLegendHtml=`
       <h4>Изменение к прошлому году</h4>
-      <i style="background: rgba(200,0,0,0.6)"></i> Снижение<br>
-      <i style="background: rgba(150,150,150,0.4)"></i> Без изменений<br>
-      <i style="background: rgba(0,200,0,0.6)"></i> Рост
+      <i style="background:rgba(200,0,0,0.6)"></i> Снижение<br>
+      <i style="background:rgba(150,150,150,0.4)"></i> Без изменений<br>
+      <i style="background:rgba(0,200,0,0.6)"></i> Рост
     `;
 
-    // 5) Панель переключения слоёв
+    // слоит переключателя
     L.control.layers(
-      { 'Базовая карта': baseLayer },
-      {
-        'Градиент потребления': choroplethLayer,
-        'Изменение к прошлому году': changeLayer
-      },
-      { collapsed: false }
+      {'Базовая карта':baseLayer},
+      {'Градиент потребления':choroplethLayer,'Изменение к прошлому году':changeLayer},
+      {collapsed:false}
     ).addTo(map);
 
-    // 6) Контрол легенды
-    const legend = L.control({ position: 'bottomright' });
-    legend.onAdd = () => {
-      const div = L.DomUtil.create('div', 'info legend');
-      div.style.background = 'white';
-      div.style.padding    = '10px';
-      div.style.borderRadius = '4px';
-      div.style.boxShadow  = '0 2px 6px rgba(0,0,0,0.15)';
-      div.style.fontSize   = '12px';
-      div.style.textAlign  = 'right';
-      return div;
-    };
+    // контрол легенды
+    const legend=L.control({position:'bottomright'});
+    legend.onAdd=()=>{const d=L.DomUtil.create('div','info legend');return d;};
     legend.addTo(map);
 
-    // 7) Переключение легенды по оверлеям
-    map.on('overlayadd overlayremove', () => {
-      if (map.hasLayer(choroplethLayer) && !map.hasLayer(changeLayer)) {
-        legend.getContainer().innerHTML = buildGradientLegend(window.lastMinV, window.lastMaxV);
-      } else if (map.hasLayer(changeLayer) && !map.hasLayer(choroplethLayer)) {
-        legend.getContainer().innerHTML = changeLegendHtml;
-      } else {
-        legend.getContainer().innerHTML = '';
-      }
+    map.on('overlayadd overlayremove',()=>{
+      if(map.hasLayer(choroplethLayer)&&!map.hasLayer(changeLayer))
+        legend.getContainer().innerHTML=buildGradientLegend(window.minV,window.maxV);
+      else if(map.hasLayer(changeLayer)&&!map.hasLayer(choroplethLayer))
+        legend.getContainer().innerHTML=changeLegendHtml;
+      else legend.getContainer().innerHTML='';
     });
 
-    // ==== Остальные элементы управления и логика ====;
-    const yearRange   = document.getElementById('year-range');
-    const yearLabel   = document.getElementById('year-label');
-    const playBtn     = document.getElementById('play-btn');
-    const pauseBtn    = document.getElementById('pause-btn');
-    const searchBtn   = document.getElementById('search-btn');
-    const searchInput = document.getElementById('region-search');
-    const topT        = document.querySelector('#top5-table tbody');
-    const botT        = document.querySelector('#bottom5-table tbody');
-    const MIN_YEAR    = +yearRange.min, MAX_YEAR = +yearRange.max;
+    // элементы управления
+    const yearRange=document.getElementById('year-range'),
+          yearLabel=document.getElementById('year-label'),
+          playBtn=document.getElementById('play-btn'),
+          pauseBtn=document.getElementById('pause-btn'),
+          searchBtn=document.getElementById('search-btn'),
+          searchInput=document.getElementById('region-search'),
+          topT=document.querySelector('#top5-table tbody'),
+          botT=document.querySelector('#bottom5-table tbody'),
+          loadingDiv=document.getElementById('loading-regions');
+    const MIN_YEAR=+yearRange.min, MAX_YEAR=+yearRange.max;
     let playInterval, debounceTimer;
 
+    // загрузка регионов с индикатором
+    loadingDiv.style.display='block';
     fetch('/api/regions')
-      .then(r => r.json())
-      .then(data => {
-        geoData = data;
-        yearRange.disabled = false;
-        playBtn.disabled   = false;
+      .then(r=>r.json())
+      .then(data=>{
+        geoData=data;
+        loadingDiv.style.display='none';
+        yearRange.disabled=false; playBtn.disabled=false;
         updateData(+yearRange.value);
       })
-      .catch(console.error);
+      .catch(err=>{
+        loadingDiv.textContent='Ошибка загрузки регионов';
+        console.error(err);
+      });
 
-    yearRange.addEventListener('input', () => {
+    // слушатели
+    yearRange.addEventListener('input',()=>{
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => updateData(+yearRange.value), 300);
+      debounceTimer=setTimeout(()=>updateData(+yearRange.value),300);
     });
-    playBtn.addEventListener('click', () => {
-      playBtn.disabled  = true;
-      pauseBtn.disabled = false;
-      playInterval = setInterval(() => {
-        let y = +yearRange.value;
-        y = y < MAX_YEAR ? y + 1 : MIN_YEAR;
-        yearRange.value       = y;
-        yearLabel.textContent = y;
+    playBtn.addEventListener('click',()=>{
+      playBtn.disabled=true; pauseBtn.disabled=false;
+      playInterval=setInterval(()=>{
+        let y=+yearRange.value;
+        y=y<MAX_YEAR?y+1:MIN_YEAR;
+        yearRange.value=y; yearLabel.textContent=y;
         updateData(y);
-      }, 1000);
+      },1000);
     });
-    pauseBtn.addEventListener('click', () => {
+    pauseBtn.addEventListener('click',()=>{
       clearInterval(playInterval);
-      playBtn.disabled  = false;
-      pauseBtn.disabled = true;
+      playBtn.disabled=false; pauseBtn.disabled=true;
     });
-    searchBtn.addEventListener('click', () => {
-      const term = searchInput.value.trim().toLowerCase();
-      if (!geoData || !term) return;
-      const feat = geoData.features.find(f => f.properties.name.toLowerCase().includes(term));
-      if (feat) {
-        const layer = L.geoJSON(feat, { style: { color: '#FFD700', weight: 3, fillOpacity: 0.3 } }).addTo(map);
+    searchBtn.addEventListener('click',()=>{
+      const term=searchInput.value.trim().toLowerCase();
+      if(!geoData||!term) return;
+      const feat=geoData.features.find(f=>f.properties.name.toLowerCase().includes(term));
+      if(feat){
+        const layer=L.geoJSON(feat,{style:{color:'#FFD700',weight:3,fillOpacity:0.3}}).addTo(map);
         map.fitBounds(layer.getBounds());
-        setTimeout(() => map.removeLayer(layer), 3000);
+        setTimeout(()=>map.removeLayer(layer),3000);
       } else alert('Регион не найден');
     });
 
-    function updateData(year) {
-      yearLabel.textContent = year;
-      const prevYear = year - 1;
+    function updateData(year){
+      yearLabel.textContent=year;
+      const prev=year-1;
       Promise.all([
-        fetch(`/api/consumption?period=${year}`).then(r => r.json()),
-        fetch(`/api/consumption?period=${prevYear}`).then(r => r.json()).catch(() => [])
-      ])
-      .then(([currData, prevData]) => {
-        const values    = {}, prevValues = {};
-        currData.forEach(o => values[o.region_code] = o.value);
-        prevData.forEach(o => prevValues[o.region_code] = o.value);
+        fetch(`/api/consumption?period=${year}`).then(r=>r.json()),
+        fetch(`/api/consumption?period=${prev}`).then(r=>r.json()).catch(()=>[])
+      ]).then(([curr,prevData])=>{
+        const values={}, prevValues={};
+        curr.forEach(o=>values[o.region_code]=o.value);
+        prevData.forEach(o=>prevValues[o.region_code]=o.value);
 
-        const vals    = Object.values(values);
-        const nonZero = vals.filter(v => v > 0);
-        const minV    = nonZero.length ? Math.min(...nonZero) : 0;
-        const maxV    = Math.max(...vals, 0);
-        window.lastMinV = minV;
-        window.lastMaxV = maxV;
+        const vals=Object.values(values), nonZero=vals.filter(v=>v>0);
+        window.minV=nonZero.length?Math.min(...nonZero):0;
+        window.maxV=vals.length?Math.max(...vals):0;
 
-        if (map.hasLayer(choroplethLayer) && !map.hasLayer(changeLayer)) {
-          legend.getContainer().innerHTML = buildGradientLegend(minV, maxV);
-        }
+        if(map.hasLayer(choroplethLayer)&&!map.hasLayer(changeLayer))
+          legend.getContainer().innerHTML=buildGradientLegend(window.minV,window.maxV);
 
-        const arr = currData.map(o => {
-          const code = o.region_code;
-          const name = geoData.features.find(f => f.properties.code === code)?.properties.name || code;
-          const v = o.value;
-          const pv = prevValues[code] || 0;
-          const arrow = year > MIN_YEAR ? (v > pv ? '↑' : v < pv ? '↓' : '') : '';
-          const arrowClass = v > pv ? 'arrow up' : v < pv ? 'arrow down' : '';
-          return { name, v, arrow, arrowClass };
+        const arr=curr.map(o=>{
+          const name=geoData.features.find(f=>f.properties.code===o.region_code)?.properties.name||o.region_code;
+          const v=o.value, pv=prevValues[o.region_code]||0;
+          const arrow=v>pv?'↑':v<pv?'↓':'';
+          const cls=v>pv?'arrow up':v<pv?'arrow down':'';
+          return {name,v,arrow,cls};
         });
-        arr.sort((a, b) => b.v - a.v);
-        const top5    = arr.slice(0, 5);
-        const bottom5 = arr.slice(-5).reverse();
-        const fmtOpts = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+        arr.sort((a,b)=>b.v-a.v);
+        const top5=arr.slice(0,5), bot5=arr.slice(-5).reverse();
+        const fmtOpts={minimumFractionDigits:1,maximumFractionDigits:1};
 
-        topT.innerHTML = top5.map(i =>
-          `<tr>
-             <td>${i.name}</td>
-             <td class="text-right">
-               ${i.v.toLocaleString(undefined, fmtOpts)} млн&nbsp;${i.arrow ? `<span class="${i.arrowClass}">${i.arrow}</span>` : ''}
-             </td>
-           </tr>`
-        ).join('');
+        topT.innerHTML=top5.map(i=>`
+          <tr>
+            <td>${i.name}</td>
+            <td class="text-right">
+              ${i.v.toLocaleString(undefined,fmtOpts)}&nbsp;
+              ${i.arrow?`<span class="${i.cls}">${i.arrow}</span>`:''}
+            </td>
+          </tr>
+        `).join('');
+        botT.innerHTML=bot5.map(i=>`
+          <tr>
+            <td>${i.name}</td>
+            <td class="text-right">
+              ${i.v.toLocaleString(undefined,fmtOpts)}&nbsp;
+              ${i.arrow?`<span class="${i.cls}">${i.arrow}</span>`:''}
+            </td>
+          </tr>
+        `).join('');
 
-        botT.innerHTML = bottom5.map(i =>
-          `<tr>
-             <td>${i.name}</td>
-             <td class="text-right">
-               ${i.v.toLocaleString(undefined, fmtOpts)} млн&nbsp;${i.arrow ? `<span class="${i.arrowClass}">${i.arrow}</span>` : ''}
-             </td>
-           </tr>`
-        ).join('');
-
+        // перерисовка слоёв
         choroplethLayer.clearLayers();
         changeLayer.clearLayers();
-
-        L.geoJSON(geoData, {
-          style: f => {
-            const v = values[f.properties.code] || 0;
-            return { fillColor: `rgba(255,0,0,${maxV ? v / maxV : 0})`, fillOpacity:0.7, weight:1 };
-          },
-          onEachFeature: setupFeature
-        }).addTo(choroplethLayer);
-
-        L.geoJSON(geoData, {
-          style: f => {
-            const code = f.properties.code;
-            const curr = values[code] || 0;
-            const prev = prevValues[code] || 0;
-            const fill = curr > prev ? 'rgba(0,200,0,0.6)' : curr < prev ? 'rgba(200,0,0,0.6)' : 'rgba(150,150,150,0.4)';
-            return { fillColor: fill, fillOpacity:0.7, weight:1 };
-          },
-          onEachFeature: setupFeature
-        }).addTo(changeLayer);
-      })
-      .catch(console.error);
+        L.geoJSON(geoData,{style:f=>{
+          const v=values[f.properties.code]||0;
+          return {fillColor:`rgba(255,0,0,${window.maxV?v/window.maxV:0})`,fillOpacity:0.7,weight:1};
+        },onEachFeature:setupFeature}).addTo(choroplethLayer);
+        L.geoJSON(geoData,{style:f=>{
+          const c=f.properties.code, currV=values[c]||0, pr=prevValues[c]||0;
+          const fill=currV>pr?'rgba(0,200,0,0.6)':currV<pr?'rgba(200,0,0,0.6)':'rgba(150,150,150,0.4)';
+          return {fillColor:fill,fillOpacity:0.7,weight:1};
+        },onEachFeature:setupFeature}).addTo(changeLayer);
+      }).catch(console.error);
     }
 
-    function setupFeature(f, layer) {
-      const code = f.properties.code;
-      const name = f.properties.name;
-      layer.bindTooltip(name);
-      layer.on('click', () => {
+    function setupFeature(f,layer){
+      const c=f.properties.code,n=f.properties.name;
+      layer.bindTooltip(n);
+      layer.on('click',()=>{
         map.closePopup();
-        const cid = `chart-${code}-${Date.now()}`;
-        const popupContent = `
-          <div class="chart-popup-wrapper">
-            <h4>${name}</h4>
-            <canvas id="${cid}" width="300" height="200"></canvas>
-          </div>`;
+        const cid=`chart-${c}-${Date.now()}`;
         layer.unbindPopup();
-        layer.bindPopup(popupContent, { maxWidth:350 }).openPopup();
+        layer.bindPopup(`
+          <div class="chart-popup-wrapper">
+            <h4>${n}</h4>
+            <canvas id="${cid}" width="300" height="200"></canvas>
+          </div>`,{maxWidth:350}).openPopup();
       });
     }
 
-    map.on('popupopen', e => {
-      const container = e.popup.getElement();
-      const canvas    = container.querySelector('canvas');
-      if (!canvas) return;
-      const regionCode = canvas.id.split('-')[1];
-      fetch(`/api/consumption/history?region_code=${regionCode}`)
-        .then(r => r.json())
-        .then(data => {
+    map.on('popupopen',e=>{
+      const c=e.popup.getElement().querySelector('canvas');
+      if(!c)return;
+      const code=c.id.split('-')[1];
+      fetch(`/api/consumption/history?region_code=${code}`)
+        .then(r=>r.json()).then(data=>{
           data.sort((a,b)=>a.period-b.period);
-          const ctx = canvas.getContext('2d');
-          if(ctx._chart) ctx._chart.destroy();
-          ctx._chart = new Chart(ctx, {
-            type:'line', data:{ labels:data.map(d=>d.period), datasets:[{ label:'Потребление, млн кВт·ч', data:data.map(d=>d.value), fill:false, tension:0.3 }]},
-            options:{ scales:{ x:{ title:{ display:true, text:'Год'}}, y:{ title:{ display:true, text:'млн кВт·ч'}} }}
-          });
+          const ctx=c.getContext('2d'); if(ctx._chart)ctx._chart.destroy();
+          ctx._chart=new Chart(ctx,{type:'line',data:{
+            labels:data.map(d=>d.period),
+            datasets:[{label:'Потребление, млн кВт·ч',data:data.map(d=>d.value),fill:false,tension:0.3}]
+          },options:{scales:{x:{title:{display:true,text:'Год'}},y:{title:{display:true,text:'млн кВт·ч'}}}}});
         });
     });
   </script>
