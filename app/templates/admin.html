@@ -1,15 +1,11 @@
 {% extends "layout.html" %}
 {% block title %}Админ-панель{% endblock %}
 {% block content %}
+  <head>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
   <h2>Админ-панель</h2>
   <p>Привет, {{ user.email }}!</p>
-
-  <!-- Навигация -->
-  <nav>
-    <a href="/">К карте</a>
-    <a href="/admin">Админ-панель</a>
-    <a href="/logout">Выйти</a>
-  </nav>
 
   <!-- Форма для импорта CSV -->
   <div class="admin-card" id="import-section">
